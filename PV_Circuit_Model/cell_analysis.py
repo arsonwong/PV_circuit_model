@@ -69,13 +69,15 @@ def Rshunt_extraction(IV_curve):
     Rshunt = min(Rshunt,100000)
     return Rshunt
 
-def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,temperature=25,Sun=1.0,thickness=180e-4):
+def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,
+                          temperature=25,Sun=1.0,thickness=180e-4,Si_intrinsic_limit=True):
     if Pmax is None:
         Pmax = Jsc*Voc*FF          
     VT = get_VT(temperature)
     max_J01 = Jsc/np.exp(Voc/VT)
     for inner_k in range(100):
-        trial_cell = make_solar_cell(Jsc, max_J01, 0.0, Rshunt, Rs, thickness=thickness)
+        trial_cell = make_solar_cell(Jsc, max_J01, 0.0, Rshunt, 
+                                     Rs, thickness=thickness,Si_intrinsic_limit=Si_intrinsic_limit)
         trial_cell.set_temperature(temperature,rebuild_IV=False)
         trial_cell.set_Suns(Sun)
         Voc_ = trial_cell.get_Voc()
@@ -84,7 +86,8 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,temperature
         max_J01 *= np.exp((Voc_-Voc)/VT)
     max_J02 = Jsc/np.exp(Voc/(2*VT))
     for inner_k in range(100):
-        trial_cell = make_solar_cell(Jsc, 0.0, max_J02, Rshunt, Rs, thickness=thickness)
+        trial_cell = make_solar_cell(Jsc, 0.0, max_J02, Rshunt, Rs, 
+                                     thickness=thickness,Si_intrinsic_limit=Si_intrinsic_limit)
         trial_cell.set_temperature(temperature,rebuild_IV=False)
         trial_cell.set_Suns(Sun)
         Voc_ = trial_cell.get_Voc()
@@ -117,7 +120,8 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,temperature
                 trial_J02 = interp_(Voc, inner_record_[:,1], inner_record_[:,0])[0]
                 trial_J02 = max(trial_J02, 0.0)
                 trial_J02 = min(trial_J02, max_J02)
-            trial_cell = make_solar_cell(Jsc, trial_J01, trial_J02, Rshunt, Rs,thickness=thickness)
+            trial_cell = make_solar_cell(Jsc, trial_J01, trial_J02, Rshunt, Rs,thickness=thickness,
+                                         Si_intrinsic_limit=Si_intrinsic_limit)
             trial_cell.set_temperature(temperature,rebuild_IV=False)
             trial_cell.set_Suns(Sun)
             Voc_ = trial_cell.get_Voc()
@@ -132,8 +136,8 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,temperature
             break
     return trial_J01, trial_J02
 
-def plot(self: CircuitGroup, fourth_quadrant=True, show_IV_parameters=True):
-    if fourth_quadrant:
+def plot(self, fourth_quadrant=True, show_IV_parameters=True):
+    if fourth_quadrant and isinstance(self,CircuitGroup):
         Voc = self.get_Voc()
         Isc = self.get_Isc()
         plt.plot(self.IV_table[0,:],-self.IV_table[1,:])
@@ -149,7 +153,7 @@ def plot(self: CircuitGroup, fourth_quadrant=True, show_IV_parameters=True):
             plt.plot(self.operating_point[0],self.operating_point[1],marker='o')
             if len(self.operating_point)==3:
                 plt.plot(self.operating_point[2],self.operating_point[1],marker='o')
-    if show_IV_parameters and (isinstance(self,Cell) or isinstance(self,Module)):
+    if show_IV_parameters and fourth_quadrant and (isinstance(self,Cell) or isinstance(self,Module)):
         max_power, Vmp, Imp = self.get_Pmax(return_op_point=True)
         Voc = self.get_Voc()
         Isc = self.get_Isc()
@@ -176,6 +180,7 @@ def plot(self: CircuitGroup, fourth_quadrant=True, show_IV_parameters=True):
     plt.xlabel("Voltage (V)")
     plt.ylabel("Current (A)")
 CircuitGroup.plot = plot
+CircuitElement.plot = plot
 
 def show(self):
     plt.show()

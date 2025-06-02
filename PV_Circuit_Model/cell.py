@@ -5,12 +5,6 @@ import matplotlib.patches as patches
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
-# ideas for tandem:
-# stack bottom to top in assembling IV
-# which is in series, thus adding voltage
-# 
-# EQE?
-
 # For Si, the intrinsic recomb limit for every cm3, for 1e15cm-3 doped n type,
 # works out to be around
 # I01 = 9.664293091887626e-14A, n1 = 1
@@ -23,7 +17,7 @@ class instrinsic_Si():
     Jsc_fractional_temp_coeff = 0.0004
 
 class Cell(CircuitGroup):
-    def __init__(self,components,connection="series",area=None,location=np.array([0,0]),
+    def __init__(self,components,connection="series",area=None,location=None,
                  rotation=0,shape=None,thickness=None,name=None,temperature=25,Suns=1.0):
         x_extent = 0.0
         y_extent = 0.0
@@ -32,8 +26,6 @@ class Cell(CircuitGroup):
             y_extent = np.max(shape[:,1])-np.min(shape[:,1])
         super().__init__(components, connection,location=location,rotation=rotation,
                          name=name,extent=np.array([x_extent,y_extent]).astype(float))
-        if self.location is None:
-            self.location = np.array([0,0])
         self.area = area
         self.shape = shape
         self.build_IV()
@@ -111,13 +103,27 @@ class Cell(CircuitGroup):
         diodes = self.findElementType(ForwardDiode)
         for diode in diodes:
             if diode.n==n:
-                if diode.tag != "intrinsic":
+                if diode.tag != "intrinsic" and not isinstance(diode,PhotonCouplingDiode):
                     J0 += diode.I0
         return J0
     def J01(self):
         return self.J0(n=1)
     def J02(self):
         return self.J0(n=2)     
+    
+    def PC_J0(self,n):
+        J0 = 0.0
+        diodes = self.findElementType(PhotonCouplingDiode)
+        for diode in diodes:
+            if diode.n==n:
+                J0 += diode.I0
+        return J0
+    def PC_J01(self):
+        return self.PC_J0(n=1)
+    def PC_I0(self,n):
+        return self.PC_J0(n)*self.area
+    def PC_I01(self):
+        return self.PC_I0(n=1)
     
     def I0(self,n):
         return self.J0(n)*self.area
@@ -129,7 +135,7 @@ class Cell(CircuitGroup):
     def set_J0(self,J0,n,temperature=25,rebuild_IV=True):
         diodes = self.findElementType(ForwardDiode)
         for diode in diodes:
-            if diode.tag != "defect" and diode.tag != "intrinsic" and diode.n==n:
+            if diode.tag != "defect" and diode.tag != "intrinsic" and diode.n==n and not isinstance(diode,PhotonCouplingDiode):
                 diode.refI0 = J0
                 diode.refT = temperature
                 diode.changeTemperature(temperature=self.temperature,rebuild_IV=False)
@@ -147,6 +153,23 @@ class Cell(CircuitGroup):
         self.set_I0(I0,n=1,temperature=temperature,rebuild_IV=rebuild_IV)
     def set_I02(self,I0,temperature=25,rebuild_IV=True):
         self.set_I0(I0,n=2,temperature=temperature,rebuild_IV=rebuild_IV)
+
+    def set_PC_J0(self,J0,n,temperature=25,rebuild_IV=True):
+        diodes = self.findElementType(PhotonCouplingDiode)
+        for diode in diodes:
+            if diode.tag != "defect" and diode.tag != "intrinsic" and diode.n==n:
+                diode.refI0 = J0
+                diode.refT = temperature
+                diode.changeTemperature(temperature=self.temperature,rebuild_IV=False)
+                break
+        if rebuild_IV:
+            self.build_IV()
+    def set_PC_J01(self,J0,temperature=25,rebuild_IV=True):
+        self.set_PC_J0(J0,n=1,temperature=temperature,rebuild_IV=rebuild_IV)
+    def set_PC_I0(self,I0,n,temperature=25,rebuild_IV=True):
+        self.set_PC_J0(I0/self.area, n=n, temperature=temperature,rebuild_IV=rebuild_IV)
+    def set_PC_I01(self,I0,temperature=25,rebuild_IV=True):
+        self.set_PC_I0(I0,n=1,temperature=temperature,rebuild_IV=rebuild_IV)
     
     def specific_Rs_cond(self):
         if self.series_resistor is None:
@@ -293,36 +316,6 @@ def draw_cells(self: CircuitGroup,display=True,show_names=False,colour_what="Vin
     return shapes, names, Vints, EL_Vints
 CircuitGroup.draw_cells = draw_cells
 
-def get_cell_col_row(self: CircuitGroup, fuzz_distance=0.2):
-    shapes, names, _, _ = self.draw_cells(display=False)
-    xs = []
-    ys = []
-    indices = []
-    for i, shape in enumerate(shapes):
-        xs.append(int(np.round(0.5*(np.max(shape[:,0])+np.min(shape[:,0]))/fuzz_distance)))
-        ys.append(int(np.round(0.5*(np.max(shape[:,1])+np.min(shape[:,1]))/fuzz_distance)))
-        indices.append(int(names[i]))
-    xs = np.array(xs)
-    ys = np.array(ys)
-    indices = np.array(indices)
-    unique_xs = np.unique(xs)
-    unique_ys = np.unique(ys)
-    unique_ys = unique_ys[::-1] # reverse y such that y increases downwards
-    cell_col_row = np.zeros((len(indices),2),dtype=int)
-    map = np.zeros((len(indices)),dtype=int)
-    inverse_map = np.zeros((len(indices)),dtype=int)
-    count = 0
-    for i, x in enumerate(unique_xs):
-        for j, y in enumerate(unique_ys):
-            find_ = np.where((xs==x) & (ys==y))[0]
-            cell_col_row[indices[find_],0] = i
-            cell_col_row[indices[find_],1] = j
-            map[indices[find_]] = count
-            inverse_map[count] = indices[find_]
-            count += 1
-    return cell_col_row, map, inverse_map
-CircuitGroup.get_cell_col_row = get_cell_col_row
-
 def wafer_shape(L, W, ingot_center=None, ingot_diameter=None):
     shape = np.array([[-W/2,-L/2],[W/2,-L/2],[W/2,L/2],[-W/2,L/2]])
     x = shape[:,0]
@@ -331,17 +324,23 @@ def wafer_shape(L, W, ingot_center=None, ingot_diameter=None):
     return shape, area
 
 # note: always made at 25C 1 Sun
-def make_solar_cell(Jsc=0.042, J01=10e-15, J02=2e-9, Rshunt=1e6, Rs=0.0, area=1.0, shape=None, thickness=180e-4, breakdown_V=-10, J0_rev=100e-15):
+def make_solar_cell(Jsc=0.042, J01=10e-15, J02=2e-9, Rshunt=1e6, Rs=0.0, area=1.0, 
+                    shape=None, thickness=180e-4, breakdown_V=-10, J0_rev=100e-15,
+                    J01_photon_coupling=0.0, Si_intrinsic_limit=True):
     elements = [CurrentSource(IL=Jsc, temp_coeff = instrinsic_Si.Jsc_fractional_temp_coeff*Jsc),
                 ForwardDiode(I0=J01,n=1),
-                ForwardDiode(I0=J02,n=2),
-                ForwardDiode(I0=instrinsic_Si.J01*thickness, n=instrinsic_Si.n1,tag="intrinsic"),
-                ForwardDiode(I0=instrinsic_Si.J0x*thickness, n=instrinsic_Si.nx,tag="intrinsic"),
-                ReverseDiode(I0=J0_rev, n=1, V_shift = -breakdown_V),
-                Resistor(cond=1/Rshunt)]
+                ForwardDiode(I0=J02,n=2)]
+    if J01_photon_coupling > 0:
+        elements.append(PhotonCouplingDiode(I0=J01_photon_coupling,n=1))
+    if Si_intrinsic_limit:
+        elements.extend([ForwardDiode(I0=instrinsic_Si.J01*thickness, n=instrinsic_Si.n1,tag="intrinsic"),
+                ForwardDiode(I0=instrinsic_Si.J0x*thickness, n=instrinsic_Si.nx,tag="intrinsic")])
+    elements.extend([ReverseDiode(I0=J0_rev, n=1, V_shift = -breakdown_V),
+                Resistor(cond=1/Rshunt)])
     if Rs == 0.0:
         cell = Cell(elements,"parallel",area=area,thickness=thickness,location=np.array([0.0,0.0]).astype(float),shape=shape,name="cell")
     else:
         group = CircuitGroup(elements,"parallel")
         cell = Cell([group,Resistor(cond=1/Rs)],"series",area=area,thickness=thickness,location=np.array([0.0,0.0]).astype(float),shape=shape,name="cell")
+    
     return cell

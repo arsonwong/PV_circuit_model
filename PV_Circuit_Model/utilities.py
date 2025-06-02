@@ -51,17 +51,17 @@ def draw_symbol(draw_func, ax=None,  x=0, y=0, color="black", text=None, **kwarg
     if draw_immediately:
         plt.show()
 
-def draw_diode_symbol(ax=None, x=0, y=0, color="black", up_or_down="down", is_LED="False"):
+def draw_diode_symbol(ax=None, x=0, y=0, color="black", up_or_down="down", is_LED=False):
     dir = 1
     if up_or_down == "up":
         dir = -1
-    if is_LED is True:
+    if is_LED:
         circle = patches.Circle((x,y), 0.17, edgecolor=color,facecolor='white',linewidth=1.5, fill=False)
         ax.add_patch(circle)
     ax.arrow(x, y+0.075*dir, 0, -0.001*dir, head_width=0.15, head_length=0.15, color=color, fc=color, ec=color)
     line = plt.Line2D([x-0.075,x+0.075], [y-0.08*dir,y-0.08*dir], color=color, linewidth=2)
     ax.add_line(line)
-    if is_LED is True:
+    if is_LED:
         ax.arrow(x-0.05, y-0.05*dir, -0.15, -0.15*dir, head_width=0.05, head_length=0.05, fc='orange', ec='orange')
         ax.arrow(x-0.075, y+0.025*dir, -0.15, -0.15*dir, head_width=0.05, head_length=0.05, fc='orange', ec='orange')
     line = plt.Line2D([x,x], [y+0.08, y+0.4], color="black", linewidth=1.5)
@@ -70,13 +70,13 @@ def draw_diode_symbol(ax=None, x=0, y=0, color="black", up_or_down="down", is_LE
     ax.add_line(line)
 
 def draw_forward_diode_symbol(ax, x=0, y=0, color="black"):
-    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="down", is_LED="False")
+    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="down", is_LED=False)
 
 def draw_reverse_diode_symbol(ax, x=0, y=0, color="black"):
-    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="up", is_LED="False")
+    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="up", is_LED=False)
 
 def draw_LED_diode_symbol(ax, x=0, y=0, color="black"):
-    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="down", is_LED="True")
+    draw_diode_symbol(ax=ax, x=x, y=y, color=color, up_or_down="down", is_LED=True)
 
 def draw_CC_symbol(ax, x=0, y=0, color="black"):
     circle = patches.Circle((x, y), 0.17, edgecolor=color,facecolor="white",linewidth=2, fill=True)

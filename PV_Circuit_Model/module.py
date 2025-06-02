@@ -7,11 +7,9 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
 class Module(CircuitGroup):
-    def __init__(self,subgroups,connection="series",location=np.array([0,0]),
+    def __init__(self,subgroups,connection="series",location=None,
                  rotation=0,cap_current=None,name=None,temperature=25,Suns=1.0):
         super().__init__(subgroups, connection,location=location,rotation=rotation,name=name)
-        if self.location is None:
-            self.location = np.array([0,0])
         self.cap_current = cap_current
         cells = self.findElementType(Cell,serialize=True)
         self.cells = cells
@@ -139,3 +137,33 @@ def reset_half_string_resistors(self:CircuitGroup, halfstring_resistor=None):
         elif isinstance(element,Resistor):
             element.set_cond(1/halfstring_resistor)
 CircuitGroup.reset_half_string_resistors = reset_half_string_resistors
+
+def get_cell_col_row(self: CircuitGroup, fuzz_distance=0.2):
+    shapes, names, _, _ = self.draw_cells(display=False)
+    xs = []
+    ys = []
+    indices = []
+    for i, shape in enumerate(shapes):
+        xs.append(int(np.round(0.5*(np.max(shape[:,0])+np.min(shape[:,0]))/fuzz_distance)))
+        ys.append(int(np.round(0.5*(np.max(shape[:,1])+np.min(shape[:,1]))/fuzz_distance)))
+        indices.append(int(names[i]))
+    xs = np.array(xs)
+    ys = np.array(ys)
+    indices = np.array(indices)
+    unique_xs = np.unique(xs)
+    unique_ys = np.unique(ys)
+    unique_ys = unique_ys[::-1] # reverse y such that y increases downwards
+    cell_col_row = np.zeros((len(indices),2),dtype=int)
+    map = np.zeros((len(indices)),dtype=int)
+    inverse_map = np.zeros((len(indices)),dtype=int)
+    count = 0
+    for i, x in enumerate(unique_xs):
+        for j, y in enumerate(unique_ys):
+            find_ = np.where((xs==x) & (ys==y))[0]
+            cell_col_row[indices[find_],0] = i
+            cell_col_row[indices[find_],1] = j
+            map[indices[find_]] = count
+            inverse_map[count] = indices[find_]
+            count += 1
+    return cell_col_row, map, inverse_map
+CircuitGroup.get_cell_col_row = get_cell_col_row

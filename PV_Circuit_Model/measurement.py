@@ -1,5 +1,8 @@
 import numpy as np
+from matplotlib import pyplot as plt
 from PV_Circuit_Model.cell_analysis import *
+from PV_Circuit_Model.cell import *
+from PV_Circuit_Model.multi_junction_cell import *
 import numbers
 
 class Measurement():
@@ -138,6 +141,8 @@ def get_measurements_groups(measurements,measurement_class=None,include_tags=Non
 
 def collate_device_measurements(devices,measurement_class=None,include_tags=None,exclude_tags=None):
     measurement_list = []
+    if not isinstance(devices,list):
+        devices = [devices]
     for device in devices:
         measurements = device.measurements
         for measurement in measurements:
@@ -155,24 +160,41 @@ def simulate_device_measurements(devices,measurement_class=None,include_tags=Non
                     measurement.simulate(device)
 
 class IV_measurement(Measurement):
-    def __init__(self,Suns,IV_curve,temperature=25,**kwargs):
-        self.keys = ["Voc", "Isc", "Pmax"]
-        super().__init__(measurement_condition={'Suns':Suns,'temperature':temperature},
+    def __init__(self,Suns,IV_curve,is_dark=False,temperature=25,IL=None,JL=None,**kwargs):
+        if not is_dark:
+            self.keys = ["Voc", "Isc", "Pmax"]
+        else:
+            self.keys = ["log_shunt_cond"]
+        super().__init__(measurement_condition={'Suns':Suns,'IL':IL,'JL':JL,'is_dark':is_dark,
+                                                'temperature':temperature},
                          measurement_data=IV_curve,**kwargs)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
-        key_parameters["Voc"] = get_Voc(data)
-        key_parameters["Isc"] = get_Isc(data)
-        key_parameters["Pmax"], _, _ = get_Pmax(data)
+        if not conditions["is_dark"]:
+            key_parameters["Voc"] = get_Voc(data)
+            key_parameters["Isc"] = get_Isc(data)
+            key_parameters["Pmax"], _, _ = get_Pmax(data)
+        else:
+            Rshunt = Rshunt_extraction(data)
+            key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
     def simulate(self,device=None):
         temperature = self.measurement_condition["temperature"]
         Suns = self.measurement_condition["Suns"]
+        IL = self.measurement_condition["IL"]
+        JL = self.measurement_condition["JL"]
         if device is None:
             device = self.parent_device
         device.set_temperature(temperature,rebuild_IV=False)
-        device.set_Suns(Suns)
+        if JL is not None:
+            device.set_JL(JL,rebuild_IV=False)
+            device.set_Suns(1.0)
+        elif IL is not None:
+            device.set_IL(IL,rebuild_IV=False)
+            device.set_Suns(1.0)
+        else:
+            device.set_Suns(Suns)
         self.simulated_data = device.IV_table
-        self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, None)
+        self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, self.measurement_condition)
     @staticmethod
     def plot_func(data,color="black"):
         plt.plot(data[0,:],data[1,:],color=color)
@@ -188,54 +210,80 @@ class Suns_Voc_measurement(Measurement):
                          measurement_data=Suns_Isc_Voc_curve,**kwargs)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
-        key_parameters["Voc"] = data[-1,:]
+        key_parameters["Voc"] = data[:,0]
     def simulate(self,device=None):
-        Suns = self.measurement_data[0,:]
-        Iscs = self.measurement_data[1,:]
-        if np.isnan(Suns[0]):
+        num_col = self.measurement_data.shape[1]
+        num_subcells = int((num_col-1)/2)
+        Suns = self.measurement_data[:,1:num_subcells+1]
+        Iscs = self.measurement_data[:,num_subcells+1:]
+        if np.isnan(Suns[0,0]):
             Suns = None
-        if np.isnan(Iscs[0]):
+        if np.isnan(Iscs[0,0]):
             Iscs = None
         if device is None:
             device = self.parent_device
-        self.simulated_data = simulate_Suns_Voc(device, Suns=Suns, Iscs=Iscs)
+        self.simulated_data, _ = simulate_Suns_Voc(device, Suns=Suns, Iscs=Iscs)
         self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, None)
     @staticmethod
-    def plot_func(data):
+    def plot_func(data,color="black"):
+        num_col = data.shape[1]
+        num_subcells = int((num_col-1)/2)
         y_label = "log10(Suns)"
-        ys = data[0,:]
+        ys = np.max(data[:,1:num_subcells+1],axis=1)
         if np.isnan(ys[0]):
             y_label = "log10(Current(A))"
-            ys = data[1,:]
+            ys = np.max(data[:,num_subcells+1:],axis=1)
         ys = np.log10(ys)
-        plt.plot(data[-1,:],ys)
+        plt.scatter(data[:,0],ys,color=color)
         plt.xlabel("Voc (V)")
         plt.ylabel(y_label)
 
-def simulate_Suns_Voc(cell:Cell, Suns=None, Iscs=None):
+def simulate_Suns_Voc(cell, Suns=None, Iscs=None):
+    subcells_num = 1
+    if isinstance(cell,MultiJunctionCell):
+        subcells_num = len(cell.cells)
     if Suns is None and Iscs is None:
         Suns = 10.0**(np.arange(-3,1,0.1))
+        Suns = Suns[:,None]
     if Iscs is not None:
+        if isinstance(Iscs,numbers.Number):
+            Iscs = Iscs*np.ones((1,subcells_num))
+        if Iscs.ndim == 1:
+            Iscs = Iscs[:,None]
+        assert(Iscs.shape[1]==subcells_num)
         Suns = np.ones_like(Iscs)*np.NaN
     else:
+        if isinstance(Suns,numbers.Number):
+            Suns = Suns*np.ones((1,subcells_num))
+        if Suns.ndim == 1:
+            Suns = Suns[:,None]
+        assert(Suns.shape[1]==subcells_num)
         Iscs = np.ones_like(Suns)*np.NaN
     Vocs = []
-    parent_Vocs = [] # if this is a subcell to a tandem cell, report tandem cell as well
-    is_in_tandem = False
-    if cell.parent is not None and cell.parent.connection=="series":
-        is_in_tandem = True
-    for i, _ in enumerate(Suns):
-        if not np.isnan(Suns[i]):
-            cell.set_Suns(Suns[i])
+    cell.set_Suns(1.0, rebuild_IV=False)
+    for i, _ in enumerate(Suns[:,0]):
+        if not np.isnan(Suns[i,0]):
+            if isinstance(cell,MultiJunctionCell):
+                for j, cell_ in enumerate(cell.cells):
+                    cell_.set_Suns(Suns[i,j])
+                cell.build_IV()
+            else:
+                cell.set_Suns(Suns[i,0])
         else:
-            cell.set_Suns(1.0)
-            cell.set_IL(Iscs[i], temperature=cell.temperature)
+            if isinstance(cell,MultiJunctionCell):
+                for j, cell_ in enumerate(cell.cells):
+                    cell_.set_IL(Iscs[i,j], temperature=cell.temperature)
+                cell.build_IV()
+                # for cell_ in cell.cells:
+                #     cell_.plot()
+                # cell.plot()
+                # cell.show()
+            else:
+                cell.set_IL(Iscs[i,0], temperature=cell.temperature)
         Vocs.append(cell.get_Voc())
-        if is_in_tandem:
-            cell.parent.build_IV()
-            parent_Vocs.append(cell.parent.get_Voc())
-    if is_in_tandem:
-        Suns_Isc_Voc_curve = np.array([Suns,Iscs,Vocs,parent_Vocs])
-    else:
-        Suns_Isc_Voc_curve = np.array([Suns,Iscs,Vocs])
-    return Suns_Isc_Voc_curve
+    Suns_Isc_Voc_curve = np.hstack([np.array(Vocs)[:,None],Suns,Iscs])
+    if len(Vocs)==1:
+        Vocs = Vocs[0]
+    return Suns_Isc_Voc_curve, Vocs
+
+

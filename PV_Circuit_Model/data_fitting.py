@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+from PV_Circuit_Model.measurement import *
 from matplotlib import pyplot as plt
 import copy
 
@@ -141,7 +142,6 @@ class Fit_Parameters():
     def limit_order_of_mag(self,order_of_mag=1.0):
         for element in self.fit_parameters:
             element.limit_order_of_mag(order_of_mag=order_of_mag)
-        return self.get_min(), self.get_max()
     def num_of_parameters(self):
         return len(self.fit_parameters)
     def num_of_enabled_parameters(self):
@@ -162,6 +162,9 @@ def linear_regression(M, Y, fit_parameters, aux={}):
         alpha = aux["alpha"]
     if "regularization_method" in aux:
         regularization_method = aux["regularization_method"]
+    if "limit_order_of_mag" in aux:
+        if aux["limit_order_of_mag"]:
+            fit_parameters.limit_order_of_mag()
     min_values = fit_parameters.get("min")
     max_values = fit_parameters.get("max")
     values = np.array(fit_parameters.get("value"))
@@ -233,9 +236,14 @@ def linear_regression(M, Y, fit_parameters, aux={}):
     return new_values
 
 def plot_error(aux,output,RMS_errors):
+    if "axs" not in aux:
+        measurements = collate_device_measurements(sample)
+        _, aux["axs"] = plt.subplots(nrows=2, ncols=2, figsize=(6, 5))
+        for ax in aux["axs"].flatten():
+            ax.set_visible(False)
     if "axs" in aux:
         axs = aux["axs"]
-        ax = axs[0,0]
+        ax = axs.flatten()[0]
         ax.set_visible(True)
         ax.clear()
         ax.scatter(np.arange(0,len(RMS_errors)), np.log10(np.array(RMS_errors)),s=3)
@@ -243,6 +251,10 @@ def plot_error(aux,output,RMS_errors):
         ax.set_title("Error", fontsize=6)
         ax.set_xlabel("Iteration", fontsize=6)
         ax.set_ylabel("log10(Error)", fontsize=6)
+        ax = axs.flatten()[1]
+        ax.set_visible(True)
+        ax.clear()
+        
         plt.tight_layout()
         if plt.gcf().canvas.manager is None:
             plt.show(block=False)

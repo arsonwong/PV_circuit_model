@@ -91,7 +91,7 @@ class Resistor(CircuitElement):
     def __init__(self, cond=1, tag=None):
         super().__init__(tag=tag)
         self.cond = cond
-    def build_IV(self, V=np.array([-0.1,0.1]), *args, **kwargs):
+    def build_IV(self, V=np.array([-0.1,-0.05,0,0.05,0.1]), *args, **kwargs):
         self.IV_table = np.array([V, V*self.cond])
     def set_cond(self,cond):
         self.cond = cond
@@ -140,12 +140,12 @@ class Diode(CircuitElement):
         if V is None:
             if max_num_points is None:
                 max_num_points = 100
-            # assume that 2.0 A/cm2 is max you'll need
+            # assume that 0.2 A/cm2 is max you'll need
             if self.I0==0:
-                Voc = 0.78
+                Voc = 10
             else:
-                Voc = self.n*self.VT*np.log(2.0/self.I0)
-            V = [self.V_shift-1.1,self.V_shift-1.0,self.V_shift]+list(self.V_shift + Voc*np.log(np.arange(1,max_num_points))/np.log(max_num_points-1))
+                Voc = self.n*self.VT*np.log(0.2/self.I0)
+            V = [self.V_shift-1.1,self.V_shift-1.0,self.V_shift,self.V_shift+0.02,self.V_shift+.08]+list(self.V_shift + Voc*np.log(np.arange(1,max_num_points))/np.log(max_num_points-1))
             V = np.array(V)
         I = self.I0*(np.exp((V-self.V_shift)/(self.n*self.VT))-1)
         self.IV_table = np.array([V,I])
@@ -165,6 +165,8 @@ class ForwardDiode(Diode):
 class PhotonCouplingDiode(ForwardDiode):
     def get_draw_func(self):
         return draw_LED_diode_symbol
+    def __str__(self):
+        return "Photon Coupling Diode: I0 = " + str(self.I0) + "A, n = " + str(self.n)
 
 class ReverseDiode(Diode):
     def __init__(self,I0=1e-15,n=1, V_shift=0,tag=None): #V_shift is to shift the starting voltage, e.g. to define breakdown
@@ -333,10 +335,28 @@ class CircuitGroup():
                 self.IV_table[1,:] += total_IL
             else:
                 Vs = []
+                left_limit = None
+                right_limit = None
                 for element in self.subgroups:
                     Vs.extend(list(element.IV_table[0,:]))
+                    if isinstance(element,ForwardDiode):
+                        if right_limit is None:
+                            right_limit = element.IV_table[0,-1]
+                        else:
+                            right_limit = min(element.IV_table[0,-1],right_limit)
+                    elif isinstance(element,ReverseDiode):
+                        if left_limit is None:
+                            left_limit = element.IV_table[0,0]
+                        else:
+                            left_limit = min(element.IV_table[0,0],left_limit)
                 Vs = np.sort(np.array(Vs))
                 Vs = np.unique(Vs)
+                if left_limit is not None:
+                    find_ = np.where(Vs >= left_limit)[0]
+                    Vs = Vs[find_]
+                if right_limit is not None:
+                    find_ = np.where(Vs <= right_limit)[0]
+                    Vs = Vs[find_]
                 Is = np.zeros_like(Vs)
                 for element in self.subgroups:
                     if not isinstance(element,CurrentSource):
@@ -346,6 +366,8 @@ class CircuitGroup():
                     find_ = np.where(np.abs(Is) < cap_current)[0]
                     Vs = Vs[find_]
                     Is = Is[find_]
+                # plt.plot(Vs,Is)
+                # plt.show()
 
         if shift_IV_only==False:
             self.IV_table = np.array([Vs,Is])
