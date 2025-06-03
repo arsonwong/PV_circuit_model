@@ -3,6 +3,7 @@ from tqdm import tqdm
 from PV_Circuit_Model.measurement import *
 from matplotlib import pyplot as plt
 import copy
+import inspect
 
 class Fit_Parameter():
     def __init__(self,name="variable",value=0.0,nominal_value=None,d_value=None,abs_min=-np.inf,abs_max=np.inf,is_log=False):
@@ -155,6 +156,105 @@ class Fit_Parameters():
     def __str__(self):
         return str(self.get_parameters())
 
+class Fit_Dashboard():
+    def __init__(self,nrows,ncols,save_file_name=None,measurements=None,RMS_errors=None):
+        _, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6, 5))
+        self.axs = axs
+        self.nrows = nrows
+        self.ncols = ncols
+        for ax in axs.flatten():
+            ax.set_visible(False)
+        self.plot_what = []
+        self.define_plot_what(which_axs=0,plot_type="error")
+        self.measurements = measurements # pointer
+        self.RMS_errors = RMS_errors # pointer
+        self.save_file_name = save_file_name
+    def define_plot_what(self, which_axs=None, measurement_type=None, key_parameter=None, measurement_condition={}, 
+                         plot_type="exp_vs_sim", x_axis=None, title=None, plot_style_parameters={}):
+        # plot type is "error", "exp_vs_sim", "overlap_curves" or "overlap_key_parameter"
+        # if measurement_type is None, then plot_type defaults to "error"
+        # if plot type is "exp_vs_sim" or "overlap_key_parameter", need to specify key_parameter
+        # if plot type is "overlap_key_parameter", need to additionally specify x_axis
+        if which_axs==None:
+            if len(self.plot_what)==0:
+                which_axs=0
+            else:
+                which_axs = self.plot_what[-1]["which_axs"] + 1
+        self.plot_what.append({"which_axs":which_axs,
+                               "measurement_type":measurement_type, 
+                             "key_parameter": key_parameter, 
+                             "measurement_condition": measurement_condition,
+                             "plot_type": plot_type,
+                             "x_axis": x_axis,
+                             "title": title,
+                             "plot_style_parameters": plot_style_parameters})
+    @staticmethod 
+    def convert_scatter_valid_kwargs(plot_style_parameters):
+        scatter_args = inspect.signature(plt.Axes.scatter).parameters
+        kwargs = {}
+        for key, value in plot_style_parameters.items():
+            if key in scatter_args:
+                kwargs[key] = value
+        return kwargs
+    def plot(self):
+        for ax in self.axs.flatten():
+            ax.clear()
+        for i in range(len(self.plot_what)):
+            which_axs = self.plot_what[i]["which_axs"]
+            ax = self.axs.flatten()[which_axs]
+            ax.tick_params(labelsize=6) 
+            kwargs = self.convert_scatter_valid_kwargs(self.plot_what[i]["plot_style_parameters"])
+            if self.plot_what[i]["plot_type"] == "error":
+                ax.set_visible(True)
+                ax.scatter(np.arange(0,len(self.RMS_errors)), np.log10(np.array(self.RMS_errors)),s=3,**kwargs) 
+                ax.set_title("RMS_error", fontsize=6)
+                ax.set_xlabel("Iteration", fontsize=6)
+                ax.set_ylabel("log10(Error)", fontsize=6)
+            else:
+                measurement_type = self.plot_what[i]["measurement_type"]
+                key_parameter = self.plot_what[i]["key_parameter"]
+                measurement_condition = self.plot_what[i]["measurement_condition"]
+                title = self.plot_what[i]["title"]
+                categories = []
+                values = []
+                for key, value in measurement_condition.items():
+                    categories.append(key)
+                    values.append(value)
+                result = get_measurements_groups(self.measurements,
+                                measurement_class=measurement_type,
+                                categories=categories,
+                                optional_x_axis=self.plot_what[i]["x_axis"])
+                exp_groups = result[0]
+                sim_groups = result[1]
+                index = (key_parameter, *values)
+                if index in exp_groups:
+                    ax.set_visible(True)
+                    exp_data = exp_groups[index]
+                    sim_data = sim_groups[index]
+                    if self.plot_what[i]["x_axis"] is not None:
+                        x_axis_groups = result[2]
+                        x_axis_data = x_axis_groups[index]
+                    match self.plot_what[i]["plot_type"]:
+                        case "exp_vs_sim":
+                            ax.plot(exp_data,exp_data,color="gray",linewidth=0.5)
+                            ax.scatter(exp_data, sim_data,s=3,**kwargs)
+                            ax.set_xlabel(key_parameter+"(exp)", fontsize=6)
+                            ax.set_ylabel(key_parameter+"(sim)", fontsize=6)
+                            if title is not None:
+                                ax.set_title(title, fontsize=6)
+                        case "overlap_curves":
+                            pass
+                        case "overlap_key_parameter":
+                            pass
+        plt.tight_layout()
+        if plt.gcf().canvas.manager is None:
+            plt.show(block=False)
+        plt.draw()
+        if self.save_file_name is not None:
+            word = self.save_file_name + "calibration_fit_round_"+str(len(self.RMS_errors)-1)+".jpg"
+            plt.savefig(word, format='jpg', dpi=300)
+        plt.pause(0.1)
+
 def linear_regression(M, Y, fit_parameters, aux={}): 
     alpha = 1e-5
     regularization_method=0 
@@ -235,46 +335,20 @@ def linear_regression(M, Y, fit_parameters, aux={}):
     fit_parameters.set("value",new_values)
     return new_values
 
-def plot_error(aux,output,RMS_errors):
-    if "axs" not in aux:
-        measurements = collate_device_measurements(sample)
-        _, aux["axs"] = plt.subplots(nrows=2, ncols=2, figsize=(6, 5))
-        for ax in aux["axs"].flatten():
-            ax.set_visible(False)
-    if "axs" in aux:
-        axs = aux["axs"]
-        ax = axs.flatten()[0]
-        ax.set_visible(True)
-        ax.clear()
-        ax.scatter(np.arange(0,len(RMS_errors)), np.log10(np.array(RMS_errors)),s=3)
-        ax.tick_params(labelsize=6)  
-        ax.set_title("Error", fontsize=6)
-        ax.set_xlabel("Iteration", fontsize=6)
-        ax.set_ylabel("log10(Error)", fontsize=6)
-        ax = axs.flatten()[1]
-        ax.set_visible(True)
-        ax.clear()
-        
-        plt.tight_layout()
-        if plt.gcf().canvas.manager is None:
-            plt.show(block=False)
-        plt.draw()
-        if "prefix" in aux:
-            word = aux["prefix"] + "calibration_fit_round_"+str(len(RMS_errors)-1)+".jpg"
-            plt.savefig(word, format='jpg', dpi=300)
-        plt.pause(0.1)
-
 # measurement_samples = collection of devices (Cell, Module, etc)
 # each with its measurements stored inside .measurements attribute
 # could be one sample only
 # could be mulitple samples
 def fit_routine(measurement_samples,fit_parameters,
-                routine_functions,
+                routine_functions,fit_dashboard=None,
                 aux={},num_of_epochs=10):
     # Initial Guess
     routine_functions["initial_guess"](fit_parameters,measurement_samples,aux)
     RMS_errors = []
     record = []
+    if fit_dashboard is not None:
+        fit_dashboard.RMS_errors = RMS_errors
+        fit_dashboard.measurements = collate_device_measurements(measurement_samples)
     if "comparison_function_iterations" not in aux:
         aux["comparison_function_iterations"] = 1
     aux["pbar"] = tqdm(total=((num_of_epochs-1)*(fit_parameters.num_of_enabled_parameters()+1)+1)*aux["comparison_function_iterations"],desc="Calibrating")
@@ -291,8 +365,8 @@ def fit_routine(measurement_samples,fit_parameters,
                 Y = np.array(output["error_vector"])
                 RMS_errors.append(np.sqrt(np.mean(Y**2)))
                 record.append({"fit_parameters": copy.deepcopy(fit_parameters),"output": output})
-                if "plot_function" in routine_functions:
-                    routine_functions["plot_function"](aux,output,RMS_errors)
+                if fit_dashboard is not None:
+                    fit_dashboard.plot()
             else:
                 M.append(output["differential_vector"])
             if epoch==num_of_epochs-1:

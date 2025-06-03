@@ -6,10 +6,9 @@ from PV_Circuit_Model.multi_junction_cell import *
 import numbers
 
 class Measurement():
+    keys = []
     # measurement can be on its own, or belonging to a device
     def __init__(self,measurement_condition,measurement_data,device=None):
-        if not hasattr(self,"keys"):
-            self.keys = []
         self.measurement_condition = measurement_condition
         self.measurement_data = measurement_data
         self.simulated_data = None
@@ -109,9 +108,12 @@ def get_measurements_differential_vector(measurements,measurement_class=None,inc
                 vector.extend(measurement.get_differential_vector())
     return vector
 
-def get_measurements_groups(measurements,measurement_class=None,include_tags=None,exclude_tags=None,categories=[]):
+def get_measurements_groups(measurements,measurement_class=None,
+                            include_tags=None,exclude_tags=None,categories=[],
+                            optional_x_axis=None):
     exp_groups = {}
     sim_groups = {}
+    x_axis_groups = {}
     for measurement in measurements:
         if measurement_class is None or isinstance(measurement,measurement_class):
             if (include_tags==None or (measurement.tag is not None and measurement.tag in include_tags)) and (exclude_tags==None or (measurement.tag is None or measurement.tag not in exclude_tags)):
@@ -128,15 +130,25 @@ def get_measurements_groups(measurements,measurement_class=None,include_tags=Non
                         exp_groups[tuple_] = []
                         sim_groups[tuple_] = []
                     exp_ = measurement.key_parameters[key]
-                    sim_ = measurement.simulated_key_parameters[key]
+                    sim_ = []
+                    if key in measurement.simulated_key_parameters:
+                        sim_ = measurement.simulated_key_parameters[key]
+                    if optional_x_axis is not None:
+                        condition = measurement.measurement_condition[optional_x_axis]
                     if isinstance(exp_,numbers.Number):
                         exp_ = [exp_]
-                        sim_ = [sim_]
                     elif isinstance(exp_, np.ndarray):
                         exp_ = exp_.tolist()
+                    if isinstance(sim_,numbers.Number):
+                        sim_ = [sim_]
+                    elif isinstance(sim_, np.ndarray):
                         sim_ = sim_.tolist()
                     exp_groups[tuple_].extend(exp_)
                     sim_groups[tuple_].extend(sim_)
+                    if optional_x_axis is not None:
+                        x_axis_groups[tuple_].extend([condition]*len(exp_))
+    if optional_x_axis is not None:
+        return exp_groups, sim_groups, x_axis_groups
     return exp_groups,sim_groups
 
 def collate_device_measurements(devices,measurement_class=None,include_tags=None,exclude_tags=None):
@@ -160,11 +172,8 @@ def simulate_device_measurements(devices,measurement_class=None,include_tags=Non
                     measurement.simulate(device)
 
 class IV_measurement(Measurement):
+    keys = ["Voc", "Isc", "Pmax"]
     def __init__(self,Suns,IV_curve,is_dark=False,temperature=25,IL=None,JL=None,**kwargs):
-        if not is_dark:
-            self.keys = ["Voc", "Isc", "Pmax"]
-        else:
-            self.keys = ["log_shunt_cond"]
         super().__init__(measurement_condition={'Suns':Suns,'IL':IL,'JL':JL,'is_dark':is_dark,
                                                 'temperature':temperature},
                          measurement_data=IV_curve,**kwargs)
@@ -203,9 +212,16 @@ class IV_measurement(Measurement):
         plt.xlabel("Voltage (V)")
         plt.ylabel("Current (A)")
 
+class dark_IV_measurement(IV_measurement):
+    keys = ["log_shunt_cond"]
+    @staticmethod
+    def derive_key_parameters(data,key_parameters,conditions):
+        Rshunt = Rshunt_extraction(data)
+        key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
+
 class Suns_Voc_measurement(Measurement):
+    keys = ["Voc"]
     def __init__(self,Suns_Isc_Voc_curve,temperature=25,**kwargs):
-        self.keys = ["Voc"]
         super().__init__(measurement_condition={'temperature':temperature},
                          measurement_data=Suns_Isc_Voc_curve,**kwargs)
     @staticmethod
