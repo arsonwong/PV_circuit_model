@@ -44,8 +44,28 @@ class Measurement():
             self.plot_func(self.simulated_data,color="red")
         plt.show()
     @staticmethod
-    def plot_func(data):
-        pass
+    def plot_func(x,y,xlabel=None,ylabel=None,title=None,color="black",ax=None,kwargs={}):
+        if kwargs is None:
+            kwargs = {}
+        if "color" not in kwargs:
+            kwargs["color"] = color
+        if ax is None:
+            plt.plot(x,y,**kwargs)
+            if xlabel is not None:
+                plt.xlabel(xlabel)
+            if ylabel is not None:
+                plt.ylabel(ylabel)
+            if title is not None:
+                plt.title(title)
+        else:
+            ax.plot(x,y,linewidth=0.5,**kwargs)
+            if xlabel is not None:
+                ax.set_xlabel(xlabel, fontsize=6)
+            if ylabel is not None:
+                ax.set_ylabel(ylabel, fontsize=6)
+            if title is not None:
+                ax.set_title(title, fontsize=6)
+
     def get_diff_vector(self,key_parameters1,key_parameters2):
         diff = []
         for key in self.keys:
@@ -129,6 +149,7 @@ def get_measurements_groups(measurements,measurement_class=None,
                     if tuple_ not in exp_groups:
                         exp_groups[tuple_] = []
                         sim_groups[tuple_] = []
+                        x_axis_groups[tuple_] = []
                     exp_ = measurement.key_parameters[key]
                     sim_ = []
                     if key in measurement.simulated_key_parameters:
@@ -171,21 +192,27 @@ def simulate_device_measurements(devices,measurement_class=None,include_tags=Non
                 if (include_tags==None or (measurement.tag is not None and measurement.tag in include_tags)) and (exclude_tags==None or (measurement.tag is None or measurement.tag not in exclude_tags)):
                     measurement.simulate(device)
 
+# row 0 = voltage, row 1 = current
 class IV_measurement(Measurement):
     keys = ["Voc", "Isc", "Pmax"]
-    def __init__(self,Suns,IV_curve,is_dark=False,temperature=25,IL=None,JL=None,**kwargs):
-        super().__init__(measurement_condition={'Suns':Suns,'IL':IL,'JL':JL,'is_dark':is_dark,
-                                                'temperature':temperature},
+    def __init__(self,Suns,IV_curve,temperature=25,measurement_cond_kwargs={},IL=None,JL=None,**kwargs):
+        if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
+            IV_curve = IV_curve.T
+        # upside down
+        if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
+            IV_curve[1,:] *= -1
+        if not hasattr(self,"measurement_condition"):
+            self.measurement_condition = {}
+        self.measurement_condition = {**self.measurement_condition, 
+                                 **{'Suns':Suns,'IL':IL,'JL':JL,'temperature':temperature},
+                                **measurement_cond_kwargs}
+        super().__init__(measurement_condition=self.measurement_condition,
                          measurement_data=IV_curve,**kwargs)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
-        if not conditions["is_dark"]:
-            key_parameters["Voc"] = get_Voc(data)
-            key_parameters["Isc"] = get_Isc(data)
-            key_parameters["Pmax"], _, _ = get_Pmax(data)
-        else:
-            Rshunt = Rshunt_extraction(data)
-            key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
+        key_parameters["Voc"] = get_Voc(data)
+        key_parameters["Isc"] = get_Isc(data)
+        key_parameters["Pmax"], _, _ = get_Pmax(data)
     def simulate(self,device=None):
         temperature = self.measurement_condition["temperature"]
         Suns = self.measurement_condition["Suns"]
@@ -205,33 +232,55 @@ class IV_measurement(Measurement):
         self.simulated_data = device.IV_table
         self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, self.measurement_condition)
     @staticmethod
-    def plot_func(data,color="black"):
-        plt.plot(data[0,:],data[1,:],color=color)
-        _, Vmp, Imp = get_Pmax(data)
-        plt.scatter(Vmp,Imp)
-        plt.xlabel("Voltage (V)")
-        plt.ylabel("Current (A)")
+    def plot_func(data,color="black",ax=None,title=None,kwargs={}):
+        Measurement.plot_func(data[0,:],data[1,:],color=color,
+                              xlabel="Voltage (V)",ylabel="Current (A)",title=title,
+                              ax=ax,kwargs=kwargs)
+        # if ax is None:
+        #     _, Vmp, Imp = get_Pmax(data)
+        #     plt.scatter(Vmp,Imp)
 
-class dark_IV_measurement(IV_measurement):
+class Light_IV_measurement(IV_measurement):
+    keys = ["Voc", "Isc", "Pmax"]
+
+class Dark_IV_measurement(IV_measurement):
     keys = ["log_shunt_cond"]
+    def __init__(self,Suns,IV_curve,temperature=25,measurement_cond_kwargs={},IL=None,JL=None):
+        if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
+            IV_curve = IV_curve.T
+        # upside down
+        if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
+            IV_curve[1,:] *= -1
+        self.measurement_condition = {"base_point":np.min(IV_curve[0,:])}
+        super().__init__(Suns=Suns,IV_curve=IV_curve,temperature=temperature,
+                         measurement_cond_kwargs=measurement_cond_kwargs,IL=IL,JL=JL)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
-        Rshunt = Rshunt_extraction(data)
+        Rshunt = Rshunt_extraction(data,base_point=conditions["base_point"])
         key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
+    @staticmethod
+    def plot_func(data,color="black",ax=None,title=None,kwargs={}):
+        # zero_point = max(0.0,np.min(data[0,:]))
+        # indices = np.where((data[0,:]>zero_point) & (data[0,:]<=zero_point+0.2))[0]
+        # data_ = data[:,indices]
+        data_ = data
+        IV_measurement.plot_func(data=data_,color=color,ax=ax,title=title,kwargs=kwargs)
 
+# row 0 = voltage, row 1 onwards Suns or current
 class Suns_Voc_measurement(Measurement):
     keys = ["Voc"]
-    def __init__(self,Suns_Isc_Voc_curve,temperature=25,**kwargs):
-        super().__init__(measurement_condition={'temperature':temperature},
+    def __init__(self,Suns_Isc_Voc_curve,temperature=25,measurement_cond_kwargs={},**kwargs):
+        super().__init__(measurement_condition={'temperature':temperature,
+                                                **measurement_cond_kwargs},
                          measurement_data=Suns_Isc_Voc_curve,**kwargs)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
-        key_parameters["Voc"] = data[:,0]
+        key_parameters["Voc"] = data[0,:]
     def simulate(self,device=None):
-        num_col = self.measurement_data.shape[1]
-        num_subcells = int((num_col-1)/2)
-        Suns = self.measurement_data[:,1:num_subcells+1]
-        Iscs = self.measurement_data[:,num_subcells+1:]
+        num_row = self.measurement_data.shape[0]
+        num_subcells = int((num_row-1)/2)
+        Suns = self.measurement_data[1:num_subcells+1,:]
+        Iscs = self.measurement_data[num_subcells+1:,:]
         if np.isnan(Suns[0,0]):
             Suns = None
         if np.isnan(Iscs[0,0]):
@@ -241,18 +290,18 @@ class Suns_Voc_measurement(Measurement):
         self.simulated_data, _ = simulate_Suns_Voc(device, Suns=Suns, Iscs=Iscs)
         self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, None)
     @staticmethod
-    def plot_func(data,color="black"):
-        num_col = data.shape[1]
-        num_subcells = int((num_col-1)/2)
+    def plot_func(data,color="black",ax=None,title=None,kwargs=None):
+        num_row = data.shape[0]
+        num_subcells = int((num_row-1)/2)
         y_label = "log10(Suns)"
-        ys = np.max(data[:,1:num_subcells+1],axis=1)
+        ys = np.max(data[1:num_subcells+1,:],axis=0)
         if np.isnan(ys[0]):
             y_label = "log10(Current(A))"
-            ys = np.max(data[:,num_subcells+1:],axis=1)
+            ys = np.max(data[num_subcells+1:,:],axis=0)
         ys = np.log10(ys)
-        plt.scatter(data[:,0],ys,color=color)
-        plt.xlabel("Voc (V)")
-        plt.ylabel(y_label)
+        Measurement.plot_func(data[0,:],ys,color=color,
+                              xlabel="Voc (V)",ylabel=y_label,title=title,
+                              ax=ax,kwargs=kwargs)
 
 def simulate_Suns_Voc(cell, Suns=None, Iscs=None):
     subcells_num = 1
@@ -263,41 +312,37 @@ def simulate_Suns_Voc(cell, Suns=None, Iscs=None):
         Suns = Suns[:,None]
     if Iscs is not None:
         if isinstance(Iscs,numbers.Number):
-            Iscs = Iscs*np.ones((1,subcells_num))
+            Iscs = Iscs*np.ones((subcells_num,1))
         if Iscs.ndim == 1:
-            Iscs = Iscs[:,None]
-        assert(Iscs.shape[1]==subcells_num)
+            Iscs = Iscs[None,:]
+        assert(Iscs.shape[0]==subcells_num)
         Suns = np.ones_like(Iscs)*np.NaN
     else:
         if isinstance(Suns,numbers.Number):
-            Suns = Suns*np.ones((1,subcells_num))
+            Suns = Suns*np.ones((subcells_num,1))
         if Suns.ndim == 1:
-            Suns = Suns[:,None]
-        assert(Suns.shape[1]==subcells_num)
+            Suns = Suns[None,:]
+        assert(Suns.shape[0]==subcells_num)
         Iscs = np.ones_like(Suns)*np.NaN
     Vocs = []
     cell.set_Suns(1.0, rebuild_IV=False)
-    for i, _ in enumerate(Suns[:,0]):
-        if not np.isnan(Suns[i,0]):
+    for i, _ in enumerate(Suns[0,:]):
+        if not np.isnan(Suns[0,i]):
             if isinstance(cell,MultiJunctionCell):
                 for j, cell_ in enumerate(cell.cells):
-                    cell_.set_Suns(Suns[i,j])
+                    cell_.set_Suns(Suns[j,i])
                 cell.build_IV()
             else:
-                cell.set_Suns(Suns[i,0])
+                cell.set_Suns(Suns[0,i])
         else:
             if isinstance(cell,MultiJunctionCell):
                 for j, cell_ in enumerate(cell.cells):
-                    cell_.set_IL(Iscs[i,j], temperature=cell.temperature)
+                    cell_.set_IL(Iscs[j,i], temperature=cell.temperature)
                 cell.build_IV()
-                # for cell_ in cell.cells:
-                #     cell_.plot()
-                # cell.plot()
-                # cell.show()
             else:
-                cell.set_IL(Iscs[i,0], temperature=cell.temperature)
+                cell.set_IL(Iscs[0,i], temperature=cell.temperature)
         Vocs.append(cell.get_Voc())
-    Suns_Isc_Voc_curve = np.hstack([np.array(Vocs)[:,None],Suns,Iscs])
+    Suns_Isc_Voc_curve = np.vstack([np.array(Vocs)[None,:],Suns,Iscs])
     if len(Vocs)==1:
         Vocs = Vocs[0]
     return Suns_Isc_Voc_curve, Vocs

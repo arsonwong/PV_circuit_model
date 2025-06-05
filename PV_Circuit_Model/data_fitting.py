@@ -201,6 +201,7 @@ class Fit_Dashboard():
             ax.clear()
         for i in range(len(self.plot_what)):
             which_axs = self.plot_what[i]["which_axs"]
+            title = self.plot_what[i]["title"]
             ax = self.axs.flatten()[which_axs]
             ax.tick_params(labelsize=6) 
             kwargs = self.convert_scatter_valid_kwargs(self.plot_what[i]["plot_style_parameters"])
@@ -210,20 +211,35 @@ class Fit_Dashboard():
                 ax.set_title("RMS_error", fontsize=6)
                 ax.set_xlabel("Iteration", fontsize=6)
                 ax.set_ylabel("log10(Error)", fontsize=6)
+            elif self.plot_what[i]["plot_type"] == "overlap_curves":
+                measurement_type = self.plot_what[i]["measurement_type"]
+                measurement_condition = self.plot_what[i]["measurement_condition"]
+                for measurement in self.measurements:
+                    if isinstance(measurement,measurement_type):
+                        meets_all_conditions = True
+                        for key, value in measurement_condition.items():
+                            if not (key in measurement.measurement_condition and measurement.measurement_condition[key]==value):
+                                meets_all_conditions = False
+                        if meets_all_conditions:
+                            ax.set_visible(True)
+                            measurement_type.plot_func(measurement.measurement_data,color="gray",ax=ax,title="Suns-Voc",kwargs=None)
+                            measurement_type.plot_func(measurement.simulated_data,ax=ax,title="Suns-Voc",kwargs=self.plot_what[i]["plot_style_parameters"])
+                            if title is not None:
+                                ax.set_title(title, fontsize=6)
             else:
                 measurement_type = self.plot_what[i]["measurement_type"]
                 key_parameter = self.plot_what[i]["key_parameter"]
                 measurement_condition = self.plot_what[i]["measurement_condition"]
-                title = self.plot_what[i]["title"]
                 categories = []
                 values = []
                 for key, value in measurement_condition.items():
                     categories.append(key)
                     values.append(value)
+                cond_key = self.plot_what[i]["x_axis"]
                 result = get_measurements_groups(self.measurements,
                                 measurement_class=measurement_type,
                                 categories=categories,
-                                optional_x_axis=self.plot_what[i]["x_axis"])
+                                optional_x_axis=cond_key)
                 exp_groups = result[0]
                 sim_groups = result[1]
                 index = (key_parameter, *values)
@@ -240,12 +256,13 @@ class Fit_Dashboard():
                             ax.scatter(exp_data, sim_data,s=3,**kwargs)
                             ax.set_xlabel(key_parameter+"(exp)", fontsize=6)
                             ax.set_ylabel(key_parameter+"(sim)", fontsize=6)
-                            if title is not None:
-                                ax.set_title(title, fontsize=6)
-                        case "overlap_curves":
-                            pass
                         case "overlap_key_parameter":
-                            pass
+                            ax.scatter(x_axis_data,exp_data,color="gray",s=3)
+                            ax.scatter(x_axis_data,sim_data,s=3,**kwargs)
+                            ax.set_xlabel(cond_key, fontsize=6)
+                            ax.set_ylabel(key_parameter, fontsize=6)
+                    if title is not None:
+                        ax.set_title(title, fontsize=6)
         plt.tight_layout()
         if plt.gcf().canvas.manager is None:
             plt.show(block=False)
@@ -332,7 +349,10 @@ def linear_regression(M, Y, fit_parameters, aux={}):
         included[too_high_indices] = 0
         included_indices = np.where(included==1)[0]
         assert(len(included_indices)>0)
+    print("kaka")
+    print(fit_parameters.get("value"))
     fit_parameters.set("value",new_values)
+    print(fit_parameters.get("value"))
     return new_values
 
 # measurement_samples = collection of devices (Cell, Module, etc)
@@ -346,9 +366,10 @@ def fit_routine(measurement_samples,fit_parameters,
     routine_functions["initial_guess"](fit_parameters,measurement_samples,aux)
     RMS_errors = []
     record = []
-    if fit_dashboard is not None:
-        fit_dashboard.RMS_errors = RMS_errors
-        fit_dashboard.measurements = collate_device_measurements(measurement_samples)
+    if fit_dashboard is None:
+        fit_dashboard = Fit_Dashboard(2,2)
+    fit_dashboard.RMS_errors = RMS_errors
+    fit_dashboard.measurements = collate_device_measurements(measurement_samples)
     if "comparison_function_iterations" not in aux:
         aux["comparison_function_iterations"] = 1
     aux["pbar"] = tqdm(total=((num_of_epochs-1)*(fit_parameters.num_of_enabled_parameters()+1)+1)*aux["comparison_function_iterations"],desc="Calibrating")
@@ -365,8 +386,7 @@ def fit_routine(measurement_samples,fit_parameters,
                 Y = np.array(output["error_vector"])
                 RMS_errors.append(np.sqrt(np.mean(Y**2)))
                 record.append({"fit_parameters": copy.deepcopy(fit_parameters),"output": output})
-                if fit_dashboard is not None:
-                    fit_dashboard.plot()
+                fit_dashboard.plot()
             else:
                 M.append(output["differential_vector"])
             if epoch==num_of_epochs-1:

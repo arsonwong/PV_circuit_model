@@ -10,8 +10,10 @@ def interp_(x, xp, fp):
     """
     xp_ = xp.copy()
     fp_ = fp.copy()
+    is_number = False
     if isinstance(x, numbers.Number):
         x = np.array([x])
+        is_number = True
     x_ = x.copy()
     while xp_[0]==xp_[1]:
         xp_ = xp_[1:]
@@ -32,6 +34,8 @@ def interp_(x, xp, fp):
     y[x_ < xp_[0]] = fp_[0] + slope_left * (x_[x_ < xp_[0]] - xp_[0])
     y[x_ > xp_[-1]] = fp_[-1] + slope_right * (x_[x_ > xp_[-1]] - xp_[-1])
     y *= y_multiplier
+    if is_number:
+        return y[0]
     return y
 
 def draw_symbol(draw_func, ax=None,  x=0, y=0, color="black", text=None, **kwargs):

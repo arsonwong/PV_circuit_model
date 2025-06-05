@@ -8,7 +8,7 @@ def get_Voc(argument):
         IV_curve = argument.IV_table
     else:
         IV_curve = argument
-    return np.interp(0,IV_curve[1,:],IV_curve[0,:])
+    return interp_(0,IV_curve[1,:],IV_curve[0,:])
 CircuitGroup.get_Voc = get_Voc
 
 def get_Isc(argument):
@@ -16,7 +16,7 @@ def get_Isc(argument):
         IV_curve = argument.IV_table
     else:
         IV_curve = argument
-    return -np.interp(0,IV_curve[0,:],IV_curve[1,:])
+    return -interp_(0,IV_curve[0,:],IV_curve[1,:])
 CircuitGroup.get_Isc = get_Isc
 
 def get_Pmax(argument, return_op_point=False):
@@ -27,7 +27,7 @@ def get_Pmax(argument, return_op_point=False):
         return_op_point = True
     Voc = get_Voc(IV_curve)
     V = np.linspace(0,Voc,1000)
-    I = np.interp(V,IV_curve[0,:],IV_curve[1,:])
+    I = interp_(V,IV_curve[0,:],IV_curve[1,:])
     power = -V*I
     index = np.argmax(power)
     Vmp = V[index]
@@ -59,8 +59,14 @@ def Rs_extraction_two_light_IVs(IV_curves):
     Rs = (Vmp0-V_point)/(Isc0-Isc1)
     return Rs
 
-def Rshunt_extraction(IV_curve):
-    indices = np.where((IV_curve[0,:]>0.0) & (IV_curve[0,:]<=0.1))[0]
+def Rshunt_extraction(IV_curve,base_point=0):
+    base_point = max(base_point,np.min(IV_curve[0,:]))
+    indices = np.where((IV_curve[0,:]>base_point) & (IV_curve[0,:]<=base_point+0.1))[0]
+    if len(indices)<2:
+        indices1 = np.where(IV_curve[0,:]<=base_point)[0]
+        indices = [indices1[-1]] + indices
+        indices2 = np.where(IV_curve[0,:]>base_point+0.1)[0]
+        indices = indices + [indices2[0]]
     m, _ = np.polyfit(IV_curve[0,indices], IV_curve[1,indices], deg=1)
     if m <= 0:
         Rshunt = 100000
@@ -104,7 +110,7 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,
             outer_record_ = np.array(outer_record)
             indices = np.argsort(outer_record_[:,0])
             outer_record_ = outer_record_[indices,:]
-            trial_J01 = interp_(Pmax, outer_record_[:,1], outer_record_[:,0])[0]
+            trial_J01 = interp_(Pmax, outer_record_[:,1], outer_record_[:,0])
             trial_J01 = max(trial_J01, 0.0)
             trial_J01 = min(trial_J01, max_J01)
         inner_record = []
@@ -117,7 +123,7 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,
                 inner_record_ = np.array(inner_record)
                 indices = np.argsort(inner_record_[:,0])
                 inner_record_ = inner_record_[indices,:]
-                trial_J02 = interp_(Voc, inner_record_[:,1], inner_record_[:,0])[0]
+                trial_J02 = interp_(Voc, inner_record_[:,1], inner_record_[:,0])
                 trial_J02 = max(trial_J02, 0.0)
                 trial_J02 = min(trial_J02, max_J02)
             trial_cell = make_solar_cell(Jsc, trial_J01, trial_J02, Rshunt, Rs,thickness=thickness,
