@@ -21,9 +21,6 @@ class Fit_Parameter():
         self.this_max = np.inf
         self.enabled = True
         self.is_differential = False
-    def initialize(self,value):
-        self.nominal_value = value
-        self.value = value
     def set_nominal(self):
         self.nominal_value = self.value
     def get_parameter(self):
@@ -222,8 +219,8 @@ class Fit_Dashboard():
                                 meets_all_conditions = False
                         if meets_all_conditions:
                             ax.set_visible(True)
-                            measurement_type.plot_func(measurement.measurement_data,color="gray",ax=ax,title="Suns-Voc",kwargs=None)
-                            measurement_type.plot_func(measurement.simulated_data,ax=ax,title="Suns-Voc",kwargs=self.plot_what[i]["plot_style_parameters"])
+                            measurement.plot_func(measurement.measurement_data,color="gray",ax=ax,title="Suns-Voc",kwargs=None)
+                            measurement.plot_func(measurement.simulated_data,ax=ax,title="Suns-Voc",kwargs=self.plot_what[i]["plot_style_parameters"])
                             if title is not None:
                                 ax.set_title(title, fontsize=6)
             else:
@@ -273,7 +270,7 @@ class Fit_Dashboard():
         plt.pause(0.1)
 
 def linear_regression(M, Y, fit_parameters, aux={}): 
-    alpha = 1e-5
+    alpha = 1e-5 
     regularization_method=0 
     if "alpha" in aux:
         alpha = aux["alpha"]
@@ -282,6 +279,10 @@ def linear_regression(M, Y, fit_parameters, aux={}):
     if "limit_order_of_mag" in aux:
         if aux["limit_order_of_mag"]:
             fit_parameters.limit_order_of_mag()
+    this_min_values = fit_parameters.get("this_min")
+    this_max_values = fit_parameters.get("this_max")
+    abs_min_values = fit_parameters.get("abs_min")
+    abs_max_values = fit_parameters.get("abs_max")
     min_values = fit_parameters.get("min")
     max_values = fit_parameters.get("max")
     values = np.array(fit_parameters.get("value"))
@@ -313,8 +314,9 @@ def linear_regression(M, Y, fit_parameters, aux={}):
             Xbias = memory[4].copy()
             M2 = memory[5].copy()
             Y2 = memory[6].copy()
-            M2 = np.vstack([M_,alpha2*np.identity(M_.shape[1])])
-            Y2 = np.vstack([Y_[:,None],np.zeros((M_.shape[1],1))])
+            if regularization_method==0:
+                M2 = np.vstack([M_,alpha2*np.identity(M_.shape[1])])
+                Y2 = np.vstack([Y_[:,None],np.zeros((M_.shape[1],1))])
 
             MTM = M2.T @ M2
             MTY = M2.T @ Y2
@@ -326,10 +328,10 @@ def linear_regression(M, Y, fit_parameters, aux={}):
             delta = X*dvalues
             new_values = values + delta
 
-            find_ = np.where(new_values < min_values)[0]
+            find_ = np.where(new_values < this_min_values)[0]
             if len(find_) > 0:
                 too_low_indices.extend(find_)
-            find2_ = np.where(new_values > max_values)[0]
+            find2_ = np.where(new_values > this_max_values)[0]
             if len(find2_) > 0:
                 too_high_indices.extend(find2_)
             if len(too_low_indices) > 0:
@@ -339,8 +341,22 @@ def linear_regression(M, Y, fit_parameters, aux={}):
                 break
             alpha2 *= 3
         
+        find_ = np.where(new_values < abs_min_values)[0]
+        if len(find_) > 0:
+            too_low_indices.extend(find_)
+        find_ = np.where(new_values > abs_max_values)[0]
+        if len(find_) > 0:
+            too_high_indices.extend(find_) 
+        if len(too_low_indices) > 0:
+            too_low_indices = list(np.unique(np.array(too_low_indices)))
+        if len(too_high_indices) > 0:
+            too_high_indices = list(np.unique(np.array(too_high_indices)))
+
         if len(too_low_indices)+len(too_high_indices) == len_excluded_indices:
             break
+        min_values = np.array(min_values)
+        max_values = np.array(max_values)
+        dvalues = np.array(dvalues)
         Xbias[too_low_indices] = (min_values[too_low_indices]-values[too_low_indices])/dvalues[too_low_indices]
         Xbias[too_high_indices] = (max_values[too_high_indices]-values[too_high_indices])/dvalues[too_high_indices]
         Ybias = M @ Xbias
@@ -349,10 +365,26 @@ def linear_regression(M, Y, fit_parameters, aux={}):
         included[too_high_indices] = 0
         included_indices = np.where(included==1)[0]
         assert(len(included_indices)>0)
-    print("kaka")
-    print(fit_parameters.get("value"))
+    # print("kaka")
+    # print(fit_parameters.get("value"))
     fit_parameters.set("value",new_values)
-    print(fit_parameters.get("value"))
+    # print(fit_parameters.get("value"))
+    # print(included_indices)
+    # print(delta)
+    # print(M_)
+    # print(MTM)
+    # print(MTY)
+    # print("kaka")
+    # print(np.max(M_,axis=1))
+    # print(np.max(M_,axis=0))
+    # print(np.max(Y_))
+    # print(np.min(M_,axis=1))
+    # print(np.min(M_,axis=0))
+    # print(np.min(Y_))
+    # # print(np.max(M2,axis=1))
+    # # print(np.max(M2,axis=0))
+    # # print(np.max(Y2))
+    # input("enter")
     return new_values
 
 # measurement_samples = collection of devices (Cell, Module, etc)
@@ -385,6 +417,7 @@ def fit_routine(measurement_samples,fit_parameters,
             if iteration==0:
                 Y = np.array(output["error_vector"])
                 RMS_errors.append(np.sqrt(np.mean(Y**2)))
+                print(RMS_errors[-1])
                 record.append({"fit_parameters": copy.deepcopy(fit_parameters),"output": output})
                 fit_dashboard.plot()
             else:

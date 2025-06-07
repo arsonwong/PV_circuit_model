@@ -18,6 +18,7 @@ class Measurement():
         self.simulated_key_parameters_baseline = {}
         self.unit_errors = {}
         self.parent_device=device
+        self.fit_weight = {}
         self.derive_key_parameters(self.measurement_data,self.key_parameters,self.measurement_condition)
         self.set_unit_errors()
     def set_unit_error(self,key,value=None):
@@ -69,6 +70,10 @@ class Measurement():
     def get_diff_vector(self,key_parameters1,key_parameters2):
         diff = []
         for key in self.keys:
+            fit_weight = 1.0
+            if key in self.fit_weight:
+                fit_weight = self.fit_weight[key]
+                
             parameter1 = key_parameters1[key]
             parameter2 = key_parameters2[key]
             if isinstance(parameter1,numbers.Number):
@@ -91,7 +96,7 @@ class Measurement():
                 assert(1==0)
             diff_vector = parameter1-parameter2
             diff_vector = diff_vector.tolist()
-            diff.extend(diff_vector/self.unit_errors[key])
+            diff.extend(diff_vector/self.unit_errors[key]*fit_weight)
         return np.array(diff)
     def set_simulation_baseline(self):
         self.simulated_key_parameters_baseline = self.simulated_key_parameters.copy()
@@ -231,8 +236,7 @@ class IV_measurement(Measurement):
             device.set_Suns(Suns)
         self.simulated_data = device.IV_table
         self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, self.measurement_condition)
-    @staticmethod
-    def plot_func(data,color="black",ax=None,title=None,kwargs={}):
+    def plot_func(self,data,color="black",ax=None,title=None,kwargs={}):
         Measurement.plot_func(data[0,:],data[1,:],color=color,
                               xlabel="Voltage (V)",ylabel="Current (A)",title=title,
                               ax=ax,kwargs=kwargs)
@@ -258,13 +262,16 @@ class Dark_IV_measurement(IV_measurement):
     def derive_key_parameters(data,key_parameters,conditions):
         Rshunt = Rshunt_extraction(data,base_point=conditions["base_point"])
         key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
-    @staticmethod
-    def plot_func(data,color="black",ax=None,title=None,kwargs={}):
-        # zero_point = max(0.0,np.min(data[0,:]))
-        # indices = np.where((data[0,:]>zero_point) & (data[0,:]<=zero_point+0.2))[0]
-        # data_ = data[:,indices]
-        data_ = data
-        IV_measurement.plot_func(data=data_,color=color,ax=ax,title=title,kwargs=kwargs)
+    def plot_func(self,data,color="black",ax=None,title=None,kwargs={}):
+        base_point = self.measurement_condition["base_point"]
+        indices = np.where((data[0,:]>=base_point) & (data[0,:]<=base_point+0.2))[0]
+        if len(indices) >= 2:
+            data_ = data[:,indices]
+        else:
+            x = [base_point,base_point+0.2]
+            y = interp_(x,data[0,:],data[1,:])
+            data_ = np.array([x,y])
+        super().plot_func(data=data_,color=color,ax=ax,title=title,kwargs=kwargs)
 
 # row 0 = voltage, row 1 onwards Suns or current
 class Suns_Voc_measurement(Measurement):
@@ -289,8 +296,7 @@ class Suns_Voc_measurement(Measurement):
             device = self.parent_device
         self.simulated_data, _ = simulate_Suns_Voc(device, Suns=Suns, Iscs=Iscs)
         self.derive_key_parameters(self.simulated_data, self.simulated_key_parameters, None)
-    @staticmethod
-    def plot_func(data,color="black",ax=None,title=None,kwargs=None):
+    def plot_func(self,data,color="black",ax=None,title=None,kwargs=None):
         num_row = data.shape[0]
         num_subcells = int((num_row-1)/2)
         y_label = "log10(Suns)"

@@ -61,11 +61,11 @@ def Rs_extraction_two_light_IVs(IV_curves):
 
 def Rshunt_extraction(IV_curve,base_point=0):
     base_point = max(base_point,np.min(IV_curve[0,:]))
-    indices = np.where((IV_curve[0,:]>base_point) & (IV_curve[0,:]<=base_point+0.1))[0]
+    indices = np.where((IV_curve[0,:]>=base_point) & (IV_curve[0,:]<=base_point+0.1))[0]
     if len(indices)<2:
         indices1 = np.where(IV_curve[0,:]<=base_point)[0]
         indices = [indices1[-1]] + indices
-        indices2 = np.where(IV_curve[0,:]>base_point+0.1)[0]
+        indices2 = np.where(IV_curve[0,:]>=base_point+0.1)[0]
         indices = indices + [indices2[0]]
     m, _ = np.polyfit(IV_curve[0,indices], IV_curve[1,indices], deg=1)
     if m <= 0:
