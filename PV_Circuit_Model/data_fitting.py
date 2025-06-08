@@ -114,6 +114,8 @@ class Fit_Parameters():
     def initialize(self, values, names=None, enabled_only=True):
         self.set("value",values,names=names,enabled_only=enabled_only)
         self.set("nominal_value",values,names=names,enabled_only=enabled_only)
+    def initialize_from_sample(sample):
+        pass
     def set_nominal(self):
         for element in self.fit_parameters:
             element.set_nominal()
@@ -152,6 +154,23 @@ class Fit_Parameters():
         pass
     def __str__(self):
         return str(self.get_parameters())
+
+def compare_experiments_to_simulations(fit_parameters, sample, aux):
+    fit_parameters.apply_to_ref_cell(aux)
+    measurements = collate_device_measurements(sample)
+    for measurement in measurements:
+        measurement.simulate()
+    output = {}
+    if fit_parameters.is_differential==False: # baseline case
+        set_simulation_baseline(measurements)
+        output["error_vector"] = get_measurements_error_vector(measurements,exclude_tags=["do_not_fit"])
+    else:
+        output["differential_vector"] = get_measurements_differential_vector(measurements,exclude_tags=["do_not_fit"])
+    return output
+
+def initial_guess(fit_parameters,sample,*args,**kwargs):
+    fit_parameters.initialize_from_sample(sample)
+    fit_parameters.set_d_value()
 
 class Fit_Dashboard():
     def __init__(self,nrows,ncols,save_file_name=None,measurements=None,RMS_errors=None):
@@ -365,26 +384,7 @@ def linear_regression(M, Y, fit_parameters, aux={}):
         included[too_high_indices] = 0
         included_indices = np.where(included==1)[0]
         assert(len(included_indices)>0)
-    # print("kaka")
-    # print(fit_parameters.get("value"))
     fit_parameters.set("value",new_values)
-    # print(fit_parameters.get("value"))
-    # print(included_indices)
-    # print(delta)
-    # print(M_)
-    # print(MTM)
-    # print(MTY)
-    # print("kaka")
-    # print(np.max(M_,axis=1))
-    # print(np.max(M_,axis=0))
-    # print(np.max(Y_))
-    # print(np.min(M_,axis=1))
-    # print(np.min(M_,axis=0))
-    # print(np.min(Y_))
-    # # print(np.max(M2,axis=1))
-    # # print(np.max(M2,axis=0))
-    # # print(np.max(Y2))
-    # input("enter")
     return new_values
 
 # measurement_samples = collection of devices (Cell, Module, etc)
