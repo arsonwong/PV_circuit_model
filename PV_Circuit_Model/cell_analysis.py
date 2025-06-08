@@ -2,6 +2,7 @@ import numpy as np
 from PV_Circuit_Model.circuit_model import *
 from PV_Circuit_Model.cell import *
 from PV_Circuit_Model.module import *
+from matplotlib import pyplot as plt
 
 def get_Voc(argument):
     if isinstance(argument,CircuitGroup):
@@ -62,6 +63,7 @@ def Rs_extraction_two_light_IVs(IV_curves):
 def Rshunt_extraction(IV_curve,base_point=0):
     base_point = max(base_point,np.min(IV_curve[0,:]))
     indices = np.where((IV_curve[0,:]>=base_point) & (IV_curve[0,:]<=base_point+0.1))[0]
+    indices = list(indices)
     if len(indices)<2:
         indices1 = np.where(IV_curve[0,:]<=base_point)[0]
         indices = [indices1[-1]] + indices

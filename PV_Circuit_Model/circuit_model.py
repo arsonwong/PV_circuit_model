@@ -309,14 +309,21 @@ class CircuitGroup():
             pc_IVs = []
             for element in reversed(self.subgroups):
                 IV_table = element.IV_table
-                for pc_IV in pc_IVs:
-                    IV_table[1,:] += interp_(IV_table[0,:], pc_IV[0,:], pc_IV[1,:])
-                V = interp_(Is,IV_table[1,:],IV_table[0,:])
+                if len(pc_IVs)>0:
+                    prev_subcell_V = interp_(Is,prev_IV[1,:],prev_IV[0,:])
+                    added_I = np.zeros_like(prev_subcell_V)
+                    for pc_IV in pc_IVs:
+                        added_I -= interp_(prev_subcell_V, pc_IV[0,:], pc_IV[1,:])
+                    V = interp_(Is-added_I,IV_table[1,:],IV_table[0,:])
+                else:
+                    V = interp_(Is,IV_table[1,:],IV_table[0,:])
                 Vs += V
                 if hasattr(self,"shape") and isinstance(element,CircuitGroup):
                     Vints += V
                 pc_IVs = []
+                prev_IV = []
                 if hasattr(element,"photon_coupling_diodes"):
+                    prev_IV = element.IV_table
                     for pc in element.photon_coupling_diodes:
                         pc_IVs.append(pc.IV_table)
                 if element.IV_table.shape[0]==3 and np.max(element.IV_table[2,:])>0:

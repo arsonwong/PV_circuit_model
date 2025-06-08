@@ -24,13 +24,13 @@ class Measurement():
     def set_unit_error(self,key,value=None):
         if value is not None:
             self.unit_errors[key] = value
-        else: # just make as percentage
+        else: # just make as percentage, say, one in a thousand
             if isinstance(self.key_parameters[key],numbers.Number):
                 avg_ = abs(self.key_parameters[key])
-                self.unit_errors[key] = avg_
+                self.unit_errors[key] = avg_/1000
             else: 
                 avg_ = np.mean(np.abs(self.key_parameters[key])) 
-                self.unit_errors[key] = avg_*np.sqrt(self.key_parameters[key].size)
+                self.unit_errors[key] = avg_*np.sqrt(self.key_parameters[key].size)/1000
     def set_unit_errors(self):
         for key in self.keys:
             self.set_unit_error(key)
@@ -248,7 +248,7 @@ class Light_IV_measurement(IV_measurement):
     keys = ["Voc", "Isc", "Pmax"]
 
 class Dark_IV_measurement(IV_measurement):
-    keys = ["log_shunt_cond"]
+    keys = ["log_shunt_cond","I_bias"]
     def __init__(self,Suns,IV_curve,temperature=25,measurement_cond_kwargs={},IL=None,JL=None):
         if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
             IV_curve = IV_curve.T
@@ -261,16 +261,24 @@ class Dark_IV_measurement(IV_measurement):
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
         Rshunt = Rshunt_extraction(data,base_point=conditions["base_point"])
+        key_parameters["I_bias"] = interp_(conditions["base_point"],data[0,:],data[1,:])
         key_parameters["log_shunt_cond"] = np.log10(1/Rshunt)
     def plot_func(self,data,color="black",ax=None,title=None,kwargs={}):
         base_point = self.measurement_condition["base_point"]
         indices = np.where((data[0,:]>=base_point) & (data[0,:]<=base_point+0.2))[0]
-        if len(indices) >= 2:
+        if len(indices) >= 2 and np.max(data[0,indices])-np.min(data[0,indices])>0.05:
             data_ = data[:,indices]
         else:
             x = [base_point,base_point+0.2]
             y = interp_(x,data[0,:],data[1,:])
             data_ = np.array([x,y])
+        # if np.isnan(data_).any() and np.isinf(data_).any():
+        #     print(data_)
+        #     print("holycrap")
+        #     assert(1==0)
+        # if color=="blue" or (kwargs is not None and "color" in kwargs and kwargs["color"]=="blue"):
+        #     print("holy")
+        #     print(data_)
         super().plot_func(data=data_,color=color,ax=ax,title=title,kwargs=kwargs)
 
 # row 0 = voltage, row 1 onwards Suns or current

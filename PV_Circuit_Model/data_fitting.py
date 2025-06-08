@@ -21,6 +21,7 @@ class Fit_Parameter():
         self.this_max = np.inf
         self.enabled = True
         self.is_differential = False
+        self.aux = {}
     def set_nominal(self):
         self.nominal_value = self.value
     def get_parameter(self):
@@ -95,7 +96,13 @@ class Fit_Parameters():
                 elif attribute=="max":
                     list_.append(element.get_max())
                 else:
-                    list_.append(getattr(element, attribute))
+                    if hasattr(element,attribute):
+                        list_.append(getattr(element, attribute))
+                    else:
+                        if attribute in element.aux:
+                            list_.append(element.aux[attribute])
+                        else:
+                            list_.append(np.NaN)
         if len(list_)==1:
             return list_[0]
         return list_
@@ -108,7 +115,10 @@ class Fit_Parameters():
         count = 0
         for element in self.fit_parameters:
             if (names is not None and element.name in names) or (names is None and ((not enabled_only) or element.enabled)):
-                setattr(element, attribute,values[count])
+                if hasattr(element,attribute):
+                    setattr(element, attribute,values[count])
+                else:
+                    element.aux[attribute] = values[count]
                 element.check_max_min()
                 count += 1
     def initialize(self, values, names=None, enabled_only=True):
@@ -140,6 +150,8 @@ class Fit_Parameters():
             dict_[element.name] = element.get_parameter()
         return dict_
     def limit_order_of_mag(self,order_of_mag=1.0):
+        if not isinstance(order_of_mag,numbers.Number):
+            order_of_mag = 1.0
         for element in self.fit_parameters:
             element.limit_order_of_mag(order_of_mag=order_of_mag)
     def num_of_parameters(self):
@@ -174,7 +186,8 @@ def initial_guess(fit_parameters,sample,*args,**kwargs):
 
 class Fit_Dashboard():
     def __init__(self,nrows,ncols,save_file_name=None,measurements=None,RMS_errors=None):
-        _, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6, 5))
+        fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6, 5))
+        fig.canvas.manager.set_window_title("Fit Dashboard")
         self.axs = axs
         self.nrows = nrows
         self.ncols = ncols
@@ -297,7 +310,7 @@ def linear_regression(M, Y, fit_parameters, aux={}):
         regularization_method = aux["regularization_method"]
     if "limit_order_of_mag" in aux:
         if aux["limit_order_of_mag"]:
-            fit_parameters.limit_order_of_mag()
+            fit_parameters.limit_order_of_mag(aux["limit_order_of_mag"])
     this_min_values = fit_parameters.get("this_min")
     this_max_values = fit_parameters.get("this_max")
     abs_min_values = fit_parameters.get("abs_min")
@@ -387,6 +400,15 @@ def linear_regression(M, Y, fit_parameters, aux={}):
     fit_parameters.set("value",new_values)
     return new_values
 
+def uncertainty_analysis(M,Y):
+    U, S, VT = np.linalg.svd(M)
+    # resolve Y into the Us
+    YintoU = Y**2 @ U[:,:len(S)]**2
+    error = np.sqrt(YintoU/S**2 @ VT**2)
+    resolution = np.sqrt(1/S**2 @ VT**2)
+    # in units of the parameter deltas
+    return resolution, error
+    
 # measurement_samples = collection of devices (Cell, Module, etc)
 # each with its measurements stored inside .measurements attribute
 # could be one sample only
@@ -417,7 +439,6 @@ def fit_routine(measurement_samples,fit_parameters,
             if iteration==0:
                 Y = np.array(output["error_vector"])
                 RMS_errors.append(np.sqrt(np.mean(Y**2)))
-                print(RMS_errors[-1])
                 record.append({"fit_parameters": copy.deepcopy(fit_parameters),"output": output})
                 fit_dashboard.plot()
             else:
@@ -430,6 +451,21 @@ def fit_routine(measurement_samples,fit_parameters,
                 return output
         M = np.array(M)
         M = M.T
+        if epoch==num_of_epochs-2:
+            resolution, error = uncertainty_analysis(M,Y)
+            # scale them back to be in the parameter native units
+            d_values = fit_parameters.get("d_value")
+            is_logs = fit_parameters.get("is_log")
+            values = fit_parameters.get("value")
+            for i, is_log in enumerate(is_logs):
+                if is_log:
+                    resolution[i] *= 10**(values[i])*(10**(d_values[i])-1)
+                    error[i] *= 10**(values[i])*(10**(d_values[i])-1)
+                else:
+                    resolution[i] *= d_values[i]
+                    error[i] *= d_values[i]
+            fit_parameters.set("error",error)
+            fit_parameters.set("resolution",resolution)
         fit_parameters.set_differential(-1)
         routine_functions["update_function"](M, Y, fit_parameters, aux)
         if "post_update_function" in routine_functions:

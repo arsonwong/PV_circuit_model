@@ -15,6 +15,12 @@ def interp_(x, xp, fp):
         x = np.array([x])
         is_number = True
     x_ = x.copy()
+    if isinstance(x_,list):
+        x_ = np.array(x_)
+    if isinstance(xp_,list):
+        xp_ = np.array(xp_)
+    if isinstance(fp_,list):
+        fp_ = np.array(fp_)
     while xp_[0]==xp_[1]:
         xp_ = xp_[1:]
         fp_ = fp_[1:]
@@ -31,7 +37,15 @@ def interp_(x, xp, fp):
     slope_left = (fp_[1] - fp_[0]) / (xp_[1] - xp_[0])
     slope_right = (fp_[-1] - fp_[-2]) / (xp_[-1] - xp_[-2])
     y = np.interp(x_, xp_, fp_)
-    y[x_ < xp_[0]] = fp_[0] + slope_left * (x_[x_ < xp_[0]] - xp_[0])
+    
+    try:
+        y[x_ < xp_[0]] = fp_[0] + slope_left * (x_[x_ < xp_[0]] - xp_[0])
+    except Exception as e:
+        print(x_)
+        print(xp_[0])
+        print("Caught an error:", e)
+        assert(1==0)
+    
     y[x_ > xp_[-1]] = fp_[-1] + slope_right * (x_[x_ > xp_[-1]] - xp_[-1])
     y *= y_multiplier
     if is_number:
