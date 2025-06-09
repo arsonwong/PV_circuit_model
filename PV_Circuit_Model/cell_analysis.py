@@ -2,6 +2,7 @@ import numpy as np
 from PV_Circuit_Model.circuit_model import *
 from PV_Circuit_Model.cell import *
 from PV_Circuit_Model.module import *
+from PV_Circuit_Model.multi_junction_cell import *
 from matplotlib import pyplot as plt
 
 def get_Voc(argument):
@@ -161,7 +162,7 @@ def plot(self, fourth_quadrant=True, show_IV_parameters=True):
             plt.plot(self.operating_point[0],self.operating_point[1],marker='o')
             if len(self.operating_point)==3:
                 plt.plot(self.operating_point[2],self.operating_point[1],marker='o')
-    if show_IV_parameters and fourth_quadrant and (isinstance(self,Cell) or isinstance(self,Module)):
+    if show_IV_parameters and fourth_quadrant and (isinstance(self,Cell) or isinstance(self,Module) or isinstance(self,MultiJunctionCell)):
         max_power, Vmp, Imp = self.get_Pmax(return_op_point=True)
         Voc = self.get_Voc()
         Isc = self.get_Isc()
@@ -172,7 +173,7 @@ def plot(self, fourth_quadrant=True, show_IV_parameters=True):
         if fourth_quadrant:
             Imp *= -1
         plt.plot(Vmp,Imp,marker='o',color="blue")
-        if isinstance(self,Cell):
+        if (isinstance(self,Cell) or isinstance(self,MultiJunctionCell)):
             plt.text(Voc*0.05, Isc*(0.8-0*y_space), f"Isc = {Isc:.3f} A")
             plt.text(Voc*0.05, Isc*(0.8-1*y_space), f"Jsc = {Isc/self.area*1000:.3f} mA/cm2")
             plt.text(Voc*0.05, Isc*(0.8-2*y_space), f"Voc = {Voc:.4f} V")
