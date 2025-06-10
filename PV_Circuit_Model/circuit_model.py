@@ -56,7 +56,18 @@ class CurrentSource(CircuitElement):
 
     def set_IL(self,IL):
         self.IL = IL
-        self.null_IV(keep_dark=True)
+        keep_dark = True
+        if IL > 0 and self.parent is not None:
+            forward_diodes = self.parent.findElementType(ForwardDiode)
+            for diode in forward_diodes:
+                while diode.max_I < 2*IL:
+                    keep_dark = False
+                    diode.max_I *= 2
+            if not keep_dark:
+                for diode in forward_diodes:
+                    diode.build_IV()
+        self.null_IV(keep_dark=keep_dark)
+        self.build_IV()
 
     def copy(self,source):
         self.refSuns = source.refSuns
@@ -140,11 +151,15 @@ class Diode(CircuitElement):
         if V is None:
             if max_num_points is None:
                 max_num_points = 100
+            max_I = 0.2
+            if hasattr(self,"max_I"):
+                max_I = self.max_I
+                max_num_points *= max_I/0.2
             # assume that 0.2 A/cm2 is max you'll need
             if self.I0==0:
                 Voc = 10
             else:
-                Voc = self.n*self.VT*np.log(0.2/self.I0)
+                Voc = self.n*self.VT*np.log(max_I/self.I0)
             V = [self.V_shift-1.1,self.V_shift-1.0,self.V_shift,self.V_shift+0.02,self.V_shift+.08]+list(self.V_shift + Voc*np.log(np.arange(1,max_num_points))/np.log(max_num_points-1))
             V = np.array(V)
         I = self.I0*(np.exp((V-self.V_shift)/(self.n*self.VT))-1)
@@ -153,6 +168,7 @@ class Diode(CircuitElement):
 class ForwardDiode(Diode):
     def __init__(self,I0=1e-15,n=1,tag=None): #V_shift is to shift the starting voltage, e.g. to define breakdown
         super().__init__(I0, n, V_shift=0,tag=tag)
+        self.max_I = 0.2
     def build_IV(self, V=None, max_num_points=100, *args, **kwargs):
         super().build_IV(V,max_num_points)
     def __str__(self):
@@ -333,6 +349,7 @@ class CircuitGroup():
             # add current
             for element in self.subgroups:
                 if isinstance(element,CurrentSource):
+                    element.set_IL(element.IL)
                     total_IL -= element.IL
             if self.dark_IV_table is not None:
                 shift_IV_only = True
@@ -345,17 +362,18 @@ class CircuitGroup():
                 left_limit = None
                 right_limit = None
                 for element in self.subgroups:
-                    Vs.extend(list(element.IV_table[0,:]))
-                    if isinstance(element,ForwardDiode):
-                        if right_limit is None:
-                            right_limit = element.IV_table[0,-1]
-                        else:
-                            right_limit = min(element.IV_table[0,-1],right_limit)
-                    elif isinstance(element,ReverseDiode):
-                        if left_limit is None:
-                            left_limit = element.IV_table[0,0]
-                        else:
-                            left_limit = min(element.IV_table[0,0],left_limit)
+                    if not isinstance(element,CurrentSource):
+                        Vs.extend(list(element.IV_table[0,:]))
+                        if isinstance(element,ForwardDiode):
+                            if right_limit is None:
+                                right_limit = element.IV_table[0,-1]
+                            else:
+                                right_limit = min(element.IV_table[0,-1],right_limit)
+                        elif isinstance(element,ReverseDiode):
+                            if left_limit is None:
+                                left_limit = element.IV_table[0,0]
+                            else:
+                                left_limit = min(element.IV_table[0,0],left_limit)
                 Vs = np.sort(np.array(Vs))
                 Vs = np.unique(Vs)
                 if left_limit is not None:
