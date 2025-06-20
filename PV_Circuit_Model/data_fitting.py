@@ -4,6 +4,10 @@ from PV_Circuit_Model.measurement import *
 from matplotlib import pyplot as plt
 import copy
 import inspect
+import numbers
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class Fit_Parameter():
     def __init__(self,name="variable",value=0.0,nominal_value=None,d_value=None,abs_min=-np.inf,abs_max=np.inf,is_log=False):
@@ -162,6 +166,8 @@ class Fit_Parameters():
             if element.enabled:
                 count += 1
         return count
+    def apply_to_ref_cell(self, aux_info):
+        pass
     def apply_to_device(self, device):
         pass
     def __str__(self):
@@ -186,12 +192,11 @@ def initial_guess(fit_parameters,sample,*args,**kwargs):
 
 class Fit_Dashboard():
     def __init__(self,nrows,ncols,save_file_name=None,measurements=None,RMS_errors=None):
-        fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6, 5))
-        fig.canvas.manager.set_window_title("Fit Dashboard")
-        self.axs = axs
+        self.fig, self.axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6, 5))
+        self.fig.canvas.manager.set_window_title("Fit Dashboard")
         self.nrows = nrows
         self.ncols = ncols
-        for ax in axs.flatten():
+        for ax in self.axs.flatten():
             ax.set_visible(False)
         self.plot_what = []
         self.define_plot_what(which_axs=0,plot_type="error")
@@ -225,7 +230,7 @@ class Fit_Dashboard():
             if key in scatter_args:
                 kwargs[key] = value
         return kwargs
-    def plot(self):
+    def prep_plot(self):
         for ax in self.axs.flatten():
             ax.clear()
         for i in range(len(self.plot_what)):
@@ -235,11 +240,12 @@ class Fit_Dashboard():
             ax.tick_params(labelsize=6) 
             kwargs = self.convert_scatter_valid_kwargs(self.plot_what[i]["plot_style_parameters"])
             if self.plot_what[i]["plot_type"] == "error":
-                ax.set_visible(True)
-                ax.scatter(np.arange(0,len(self.RMS_errors)), np.log10(np.array(self.RMS_errors)),s=3,**kwargs) 
-                ax.set_title("RMS_error", fontsize=6)
-                ax.set_xlabel("Iteration", fontsize=6)
-                ax.set_ylabel("log10(Error)", fontsize=6)
+                if self.RMS_errors is not None:
+                    ax.set_visible(True)
+                    ax.scatter(np.arange(0,len(self.RMS_errors)), np.log10(np.array(self.RMS_errors)),s=3,**kwargs) 
+                    ax.set_title("RMS_error", fontsize=6)
+                    ax.set_xlabel("Iteration", fontsize=6)
+                    ax.set_ylabel("log10(Error)", fontsize=6)
             elif self.plot_what[i]["plot_type"] == "overlap_curves":
                 measurement_type = self.plot_what[i]["measurement_type"]
                 measurement_condition = self.plot_what[i]["measurement_condition"]
@@ -251,8 +257,8 @@ class Fit_Dashboard():
                                 meets_all_conditions = False
                         if meets_all_conditions:
                             ax.set_visible(True)
-                            measurement.plot_func(measurement.measurement_data,color="gray",ax=ax,title="Suns-Voc",kwargs=None)
-                            measurement.plot_func(measurement.simulated_data,ax=ax,title="Suns-Voc",kwargs=self.plot_what[i]["plot_style_parameters"])
+                            measurement.plot_func(measurement.measurement_data,color="gray",ax=ax,title=title,kwargs=None)
+                            measurement.plot_func(measurement.simulated_data,ax=ax,title=title,kwargs=self.plot_what[i]["plot_style_parameters"])
                             if title is not None:
                                 ax.set_title(title, fontsize=6)
             else:
@@ -292,7 +298,8 @@ class Fit_Dashboard():
                             ax.set_ylabel(key_parameter, fontsize=6)
                     if title is not None:
                         ax.set_title(title, fontsize=6)
-        plt.tight_layout()
+        self.fig.tight_layout()
+    def plt_plot(self):
         if plt.gcf().canvas.manager is None:
             plt.show(block=False)
         plt.draw()
@@ -300,6 +307,94 @@ class Fit_Dashboard():
             word = self.save_file_name + "calibration_fit_round_"+str(len(self.RMS_errors)-1)+".jpg"
             plt.savefig(word, format='jpg', dpi=300)
         plt.pause(0.1)
+    def plot(self):
+        self.prep_plot()
+        self.plt_plot()
+
+class Interactive_Fit_Dashboard(Fit_Dashboard):
+    def __init__(self,measurement_samples,fit_parameters,nrows=None,ncols=None,ref_fit_dashboard=None):
+        if ref_fit_dashboard is not None:
+            nrows = ref_fit_dashboard.nrows
+            ncols = ref_fit_dashboard.ncols
+        self.nrows = nrows
+        self.ncols = ncols
+        self.RMS_errors = None
+        if ref_fit_dashboard is not None:
+            self.plot_what = ref_fit_dashboard.plot_what
+        self.measurements = collate_device_measurements(measurement_samples)
+        self.parameter_names = fit_parameters.get("name",enabled_only=False)
+        self.default_values = fit_parameters.get("value",enabled_only=False)
+        fit_parameters.limit_order_of_mag(2)
+        fit_parameters.set_differential(-1)
+        self.min = fit_parameters.get("min",enabled_only=False)
+        self.max = fit_parameters.get("max",enabled_only=False)
+        self.fit_parameters = fit_parameters
+
+    def sync_slider_to_entry(self, i):
+        val = self.sliders[i].get()
+        self.display_values[i].config(text=f"{val:.2f}")
+        self.plot()
+
+    def reset_slider(self,i):
+        self.sliders[i].set(self.default_values[i])
+        self.sync_slider_to_entry(i)
+
+    def on_close(self):
+        self.control_root.quit()
+        self.plot_root.destroy()
+        self.control_root.destroy()
+
+    def plot(self):
+        update_values = []
+        for slider in self.sliders:
+            update_values.append(slider.get())
+        self.fit_parameters.set("value",update_values,enabled_only=False)
+        self.fit_parameters.apply_to_ref_cell(aux_info=None)
+        for measurement in self.measurements:
+            measurement.simulate()
+        self.prep_plot()
+        self.canvas.draw()
+
+    def run(self):
+        plot_what = self.plot_what
+        super().__init__(self.nrows,self.ncols,measurements=self.measurements)
+        self.plot_what = plot_what
+
+        # Controls window
+        self.control_root = tk.Tk()
+        self.control_root.title("Sliders")
+        self.control_root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # Plot window (separate)
+        self.plot_root = tk.Toplevel(self.control_root)
+        self.plot_root.title("Fit Dashboard")
+        self.plot_root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # Setup figure in plot window
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.plot_root)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+        self.sliders = []
+        self.reset_buttons = []
+        self.display_values = []
+        for i, name in enumerate(self.parameter_names):
+            frame = tk.Frame(self.control_root)
+            frame.pack(pady=5, padx=10, fill='x')
+            ttk.Label(frame, text=name).pack(side='left', padx=5)
+            ttk.Label(frame, text=f"{self.min[i]:.2f}").pack(side='left', padx=5)
+            self.sliders.append(ttk.Scale(frame, from_=self.min[i], to=self.max[i], orient='horizontal'))
+            self.sliders[-1].set(self.default_values[i])
+            self.sliders[-1].pack(side='left', expand=True, fill='x')
+            self.sliders[-1].bind("<ButtonRelease-1>", lambda e, i=i: self.sync_slider_to_entry(i))
+            ttk.Label(frame, text=f"{self.max[i]:.2f}").pack(side='left', padx=5)
+            self.reset_buttons.append(ttk.Button(frame, text="Reset", command=lambda i=i: self.reset_slider(i)))
+            self.reset_buttons[-1].pack(side='left', padx=5)
+            self.display_values.append(ttk.Label(frame, text=f"{self.default_values[i]:.2f}"))
+            self.display_values[-1].pack(side="right", padx=5)
+
+        self.plot()
+        self.control_root.mainloop()
+        
 
 def linear_regression(M, Y, fit_parameters, aux={}): 
     alpha = 1e-5 
