@@ -21,6 +21,7 @@ class CircuitElement:
         self.operating_point = None #V,I
         self.circuit_diagram_extent = [0, 0.8]
         self.parent = None
+        self.aux = {}
     def set_operating_point(self,V=None,I=None,dark_IV=None):
         if V is not None:
             I = np.interp(V,self.IV_table[0,:],self.IV_table[1,:])
@@ -112,7 +113,16 @@ class Resistor(CircuitElement):
     def __str__(self):
         return "Resistor: R = " + self.get_value_text()
     def get_value_text(self):
-        return f"{1/self.cond:.3f} ohm"
+        R = 1/self.cond
+        if "area" in self.aux:
+            R *= self.aux["area"]
+        word = f"{R:.3f}"
+        if "error" in self.aux and not np.isnan(self.aux["error"]):
+            R_cond_error = self.aux["error"]
+            R_error = R**2*R_cond_error
+            word += f"\n\u00B1{R_error:.3f}"
+        word += " ohm"
+        return word
     def get_draw_func(self):
         return draw_resistor_symbol
 
@@ -174,7 +184,11 @@ class ForwardDiode(Diode):
     def __str__(self):
         return "Forward Diode: I0 = " + str(self.I0) + "A, n = " + str(self.n)
     def get_value_text(self):
-        return f"I0 = {self.I0:.3e}A\nn = {self.n:.2f}"
+        word = f"I0 = {self.I0:.3e}"
+        if "error" in self.aux and not np.isnan(self.aux["error"]):
+            word += f"\n\u00B1{self.aux["error"]:.3e}"
+        word += f" A\nn = {self.n:.2f}"
+        return word
     def get_draw_func(self):
         return draw_forward_diode_symbol
     
@@ -341,7 +355,8 @@ class CircuitGroup():
                 if hasattr(element,"photon_coupling_diodes"):
                     prev_IV = element.IV_table
                     for pc in element.photon_coupling_diodes:
-                        pc_IVs.append(pc.IV_table)
+                        pc_IVs.append(pc.IV_table.copy())
+                        pc_IVs[-1][1,:] *= element.area
                 if element.IV_table.shape[0]==3 and np.max(element.IV_table[2,:])>0:
                     Vint = interp_(Is,IV_table[2,:],IV_table[0,:])
                     Vints += Vint
@@ -397,7 +412,7 @@ class CircuitGroup():
         if shift_IV_only==False:
             self.IV_table = np.array([Vs,Is])
             if max_num_points is None:
-                self.IV_table = np.array([Vs,Is])
+                pass
             else:
                 V_range = np.max(Vs)-np.min(Vs)
                 I_range = np.max(Is)-np.min(Is)

@@ -13,6 +13,7 @@ class MultiJunctionCell(CircuitGroup):
         self.cells = subcells
         if Rs > 0:
             series_resistor = Resistor(cond=self.area/Rs)
+            series_resistor.aux["area"] = self.area
             self.series_resistor = series_resistor
             components = subcells + [series_resistor]
         else:
@@ -49,7 +50,7 @@ class MultiJunctionCell(CircuitGroup):
         self.temperature = temperature
         if rebuild_IV:
             self.build_IV()
-    def build_IV(self, max_num_points=1000):
+    def build_IV(self, max_num_points=None):
         super().build_IV(max_num_points=max_num_points)
     def specific_Rs_cond(self):
         if self.series_resistor is None:

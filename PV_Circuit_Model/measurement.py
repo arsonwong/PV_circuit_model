@@ -272,13 +272,6 @@ class Dark_IV_measurement(IV_measurement):
             x = [base_point,base_point+0.2]
             y = interp_(x,data[0,:],data[1,:])
             data_ = np.array([x,y])
-        # if np.isnan(data_).any() and np.isinf(data_).any():
-        #     print(data_)
-        #     print("holycrap")
-        #     assert(1==0)
-        # if color=="blue" or (kwargs is not None and "color" in kwargs and kwargs["color"]=="blue"):
-        #     print("holy")
-        #     print(data_)
         super().plot_func(data=data_,color=color,ax=ax,title=title,kwargs=kwargs)
 
 # row 0 = voltage, row 1 onwards Suns or current
