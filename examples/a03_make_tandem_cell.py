@@ -18,8 +18,8 @@ def main(display=True):
     
     tandem_cell = MultiJunctionCell([bottom_cell,top_cell])
 
-    tandem_cell.draw(display_value=True)
-    tandem_cell.plot()
+    tandem_cell.draw(display_value=True,title="Tandem Cell Model")
+    tandem_cell.plot(title="Tandem Cell I-V Curve")
     tandem_cell.show()
 
     return tandem_cell

@@ -467,7 +467,7 @@ class CircuitGroup():
             word += str(element) + "\n"
         return word    
     
-    def draw(self, ax=None, x=0, y=0, display_value=False):
+    def draw(self, ax=None, x=0, y=0, display_value=False, title="Model"):
         global pbar
         draw_immediately = False
         if ax is None:
@@ -519,6 +519,7 @@ class CircuitGroup():
             for spine in ax.spines.values():
                 spine.set_visible(False)
             fig.tight_layout()
+            fig.canvas.manager.set_window_title(title)
             plt.show()
 
 def get_extent(elements, center=True):

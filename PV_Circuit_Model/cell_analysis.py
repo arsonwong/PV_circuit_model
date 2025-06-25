@@ -145,7 +145,7 @@ def estimate_cell_J01_J02(Jsc,Voc,Pmax=None,FF=1.0,Rs=0.0,Rshunt=1e6,
             break
     return trial_J01, trial_J02
 
-def plot(self, fourth_quadrant=True, show_IV_parameters=True):
+def plot(self, fourth_quadrant=True, show_IV_parameters=True, title="I-V Curve"):
     if fourth_quadrant and isinstance(self,CircuitGroup):
         Voc = self.get_Voc()
         Isc = self.get_Isc()
@@ -162,7 +162,7 @@ def plot(self, fourth_quadrant=True, show_IV_parameters=True):
             plt.plot(self.operating_point[0],self.operating_point[1],marker='o')
             if len(self.operating_point)==3:
                 plt.plot(self.operating_point[2],self.operating_point[1],marker='o')
-    if show_IV_parameters and fourth_quadrant and (isinstance(self,Cell) or isinstance(self,Module) or isinstance(self,MultiJunctionCell)):
+    if show_IV_parameters and fourth_quadrant and (isinstance(self,Cell) or isinstance(self,Module) or isinstance(self,MultiJunctionCell) or self.__class__.__name__=="Module" or self.__class__.__name__=="Cell" or self.__class__.__name__=="MultiJunctionCell"):
         max_power, Vmp, Imp = self.get_Pmax(return_op_point=True)
         Voc = self.get_Voc()
         Isc = self.get_Isc()
@@ -173,7 +173,7 @@ def plot(self, fourth_quadrant=True, show_IV_parameters=True):
         if fourth_quadrant:
             Imp *= -1
         plt.plot(Vmp,Imp,marker='o',color="blue")
-        if (isinstance(self,Cell) or isinstance(self,MultiJunctionCell)):
+        if (isinstance(self,Cell) or isinstance(self,MultiJunctionCell) or self.__class__.__name__=="Cell" or self.__class__.__name__=="MultiJunctionCell"):
             plt.text(Voc*0.05, Isc*(0.8-0*y_space), f"Isc = {Isc:.3f} A")
             plt.text(Voc*0.05, Isc*(0.8-1*y_space), f"Jsc = {Isc/self.area*1000:.3f} mA/cm2")
             plt.text(Voc*0.05, Isc*(0.8-2*y_space), f"Voc = {Voc:.4f} V")
@@ -188,6 +188,7 @@ def plot(self, fourth_quadrant=True, show_IV_parameters=True):
             plt.text(Voc*0.05, Isc*(0.8-3*y_space), f"Pmax = {max_power:.2f} W")
     plt.xlabel("Voltage (V)")
     plt.ylabel("Current (A)")
+    plt.gcf().canvas.manager.set_window_title(title)
 CircuitGroup.plot = plot
 CircuitElement.plot = plot
 

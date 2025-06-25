@@ -245,7 +245,7 @@ class Module(CircuitGroup):
         super().build_IV(max_num_points=max_num_points,
                          cap_current=self.cap_current)
     
-def draw_cells(self: CircuitGroup,display=True,show_names=False,colour_what="Vint"):
+def draw_cells(self: CircuitGroup,display=True,show_names=False,colour_what="Vint",title="Cells Layout"):
     shapes = []
     names = []
     Vints = []
@@ -312,6 +312,7 @@ def draw_cells(self: CircuitGroup,display=True,show_names=False,colour_what="Vin
             spine.set_visible(False)
         fig.tight_layout()
         ax.set_aspect('equal')
+        plt.gcf().canvas.manager.set_window_title(title)
         plt.show()
     return shapes, names, Vints, EL_Vints
 CircuitGroup.draw_cells = draw_cells

@@ -17,9 +17,9 @@ def main(display=True):
         # draw module cells layout
         module.draw_cells(show_names=True)
         # draw its circuit model representation
-        module.draw()
+        module.draw(title="Module model")
         # plot its IV curve
-        module.plot()
+        module.plot(title="Module I-V Curve")
         module.show()
         # write out its constituent parts and values
         print(module)

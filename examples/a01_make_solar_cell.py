@@ -21,9 +21,9 @@ def main(display=True):
 
     if display:
         # draw its circuit model representation
-        cell.draw(display_value=True)
+        cell.draw(display_value=True,title="Cell Model")
         # plot its IV curve
-        cell.plot()
+        cell.plot(title="Cell I-V Curve")
         cell.show()
         # write out its constituent parts and values
         print(cell)
