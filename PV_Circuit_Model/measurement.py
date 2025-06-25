@@ -3,22 +3,32 @@ from matplotlib import pyplot as plt
 from PV_Circuit_Model.cell_analysis import *
 from PV_Circuit_Model.cell import *
 from PV_Circuit_Model.multi_junction_cell import *
+from PV_Circuit_Model.utilities import *
 import numbers
+import os
+import json
 
 class Measurement():
     keys = []
+    data_rows = []
     # measurement can be on its own, or belonging to a device
-    def __init__(self,measurement_condition,measurement_data,device=None):
-        self.measurement_condition = measurement_condition
-        self.measurement_data = measurement_data
-        self.simulated_data = None
-        self.tag = None
+    def __init__(self,measurement_condition=None,measurement_data=None,json_filepath=None,device=None):
+        # either must input the measurement_condition + measurement_data, or
+        # read these from a json file
+        assert((measurement_condition is not None and measurement_data is not None) or json_filepath is not None)
+        if json_filepath is not None:
+            self.read_file(json_filepath)
+        else:
+            self.measurement_condition = measurement_condition
+            self.measurement_data = measurement_data
+            self.simulated_data = None
+            self.tag = None
+            self.fit_weight = {}
         self.key_parameters = {}
         self.simulated_key_parameters = {}
         self.simulated_key_parameters_baseline = {}
         self.unit_errors = {}
         self.parent_device=device
-        self.fit_weight = {}
         self.derive_key_parameters(self.measurement_data,self.key_parameters,self.measurement_condition)
         self.set_unit_errors()
     def set_unit_error(self,key,value=None):
@@ -106,7 +116,42 @@ class Measurement():
         return self.get_diff_vector(self.simulated_key_parameters,self.simulated_key_parameters_baseline)
     def __str__(self):
         return str(self.key_parameters)
-    
+    def write_file(self,filename,exp_or_sim="exp"):
+        output = {"measurement_type": self.__class__.__name__, 
+                  "measurement_condition": self.measurement_condition.copy(),
+                  "fit_weight": self.fit_weight.copy(),
+                  "tag": self.tag}
+        if exp_or_sim=="exp" or exp_or_sim=="both":
+            output["experimental_data"] = []
+            for i, row in enumerate(self.data_rows):
+                output["experimental_data"].append({"row_name":row, "data":self.measurement_data[i,:].copy()})
+        if exp_or_sim=="sim" or exp_or_sim=="both":
+            output["simulated_data"] = []
+            for i, row in enumerate(self.data_rows):
+                output["simulated_data"].append({"row_name":row, "data":self.simulated_data[i,:].copy()})
+        output = convert_ndarrays_to_lists(output)
+        with open(filename, "w") as f:
+            json.dump(output, f, indent=4)
+    def read_file(self,filename):      
+        with open(filename, "r") as f:
+            json_ = json.load(f)
+        if "measurement_condition" in json_:
+            self.measurement_condition = json_["measurement_condition"]
+        if "experimental_data" in json_:
+            self.measurement_data = []
+            for row in json_["experimental_data"]:
+                self.measurement_data.append(row["data"])
+            self.measurement_data = np.array(self.measurement_data)
+        if "simulated_data" in json_:
+            self.simulated_data = []
+            for row in json_["simulated_data"]:
+                self.simulated_data.append(row["data"])
+            self.simulated_data = np.array(self.simulated_data)
+        if "fit_weight" in json_:
+            self.fit_weight = json_["fit_weight"]
+        if "tag" in json_:
+            self.tag = json_["tag"]
+
 def assign_measurements(self:CircuitGroup, measurements):
     for measurement in measurements:
         measurement.parent_device = self
@@ -200,19 +245,23 @@ def simulate_device_measurements(devices,measurement_class=None,include_tags=Non
 # row 0 = voltage, row 1 = current
 class IV_measurement(Measurement):
     keys = ["Voc", "Isc", "Pmax"]
-    def __init__(self,Suns,IV_curve,temperature=25,measurement_cond_kwargs={},IL=None,JL=None,**kwargs):
-        if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
-            IV_curve = IV_curve.T
-        # upside down
-        if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
-            IV_curve[1,:] *= -1
-        if not hasattr(self,"measurement_condition"):
-            self.measurement_condition = {}
-        self.measurement_condition = {**self.measurement_condition, 
-                                 **{'Suns':Suns,'IL':IL,'JL':JL,'temperature':temperature},
-                                **measurement_cond_kwargs}
-        super().__init__(measurement_condition=self.measurement_condition,
-                         measurement_data=IV_curve,**kwargs)
+    data_rows = ["Current(A)","Voltage(V)"]
+    def __init__(self,Suns=None,IV_curve=None,temperature=25,measurement_cond_kwargs={},IL=None,JL=None,json_filepath=None,**kwargs):
+        if json_filepath is not None:
+            super().__init__(json_filepath=json_filepath)
+        else:
+            if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
+                IV_curve = IV_curve.T
+            # upside down
+            if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
+                IV_curve[1,:] *= -1
+            if not hasattr(self,"measurement_condition"):
+                self.measurement_condition = {}
+            self.measurement_condition = {**self.measurement_condition, 
+                                    **{'Suns':Suns,'IL':IL,'JL':JL,'temperature':temperature},
+                                    **measurement_cond_kwargs}
+            super().__init__(measurement_condition=self.measurement_condition,
+                            measurement_data=IV_curve,**kwargs)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
         key_parameters["Voc"] = get_Voc(data)
@@ -246,18 +295,23 @@ class IV_measurement(Measurement):
 
 class Light_IV_measurement(IV_measurement):
     keys = ["Voc", "Isc", "Pmax"]
+    data_rows = ["Current(A)","Voltage(V)"]
 
 class Dark_IV_measurement(IV_measurement):
     keys = ["log_shunt_cond","I_bias"]
-    def __init__(self,Suns,IV_curve,temperature=25,measurement_cond_kwargs={},IL=None,JL=None):
-        if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
-            IV_curve = IV_curve.T
-        # upside down
-        if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
-            IV_curve[1,:] *= -1
-        self.measurement_condition = {"base_point":np.min(IV_curve[0,:])}
-        super().__init__(Suns=Suns,IV_curve=IV_curve,temperature=temperature,
-                         measurement_cond_kwargs=measurement_cond_kwargs,IL=IL,JL=JL)
+    data_rows = ["Current(A)","Voltage(V)"]
+    def __init__(self,Suns=None,IV_curve=None,temperature=25,measurement_cond_kwargs={},IL=None,JL=None,json_filepath=None):
+        if json_filepath is not None:
+            super().__init__(json_filepath=json_filepath)
+        else:
+            if isinstance(IV_curve, np.ndarray) and IV_curve.shape[0]>0 and IV_curve.shape[1]==2:
+                IV_curve = IV_curve.T
+            # upside down
+            if (IV_curve[0,0]-IV_curve[0,-1])*(IV_curve[1,0]-IV_curve[1,-1]) < 0:
+                IV_curve[1,:] *= -1
+            self.measurement_condition = {"base_point":np.min(IV_curve[0,:])}
+            super().__init__(Suns=Suns,IV_curve=IV_curve,temperature=temperature,
+                            measurement_cond_kwargs=measurement_cond_kwargs,IL=IL,JL=JL)
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
         Rshunt = Rshunt_extraction(data,base_point=conditions["base_point"])
@@ -277,10 +331,20 @@ class Dark_IV_measurement(IV_measurement):
 # row 0 = voltage, row 1 onwards Suns or current
 class Suns_Voc_measurement(Measurement):
     keys = ["Voc"]
-    def __init__(self,Suns_Isc_Voc_curve,temperature=25,measurement_cond_kwargs={},**kwargs):
-        super().__init__(measurement_condition={'temperature':temperature,
-                                                **measurement_cond_kwargs},
-                         measurement_data=Suns_Isc_Voc_curve,**kwargs)
+    def __init__(self,Suns_Isc_Voc_curve=None,temperature=25,measurement_cond_kwargs={},json_filepath=None,**kwargs):
+        if json_filepath is not None:
+            super().__init__(json_filepath=json_filepath)
+        else:
+            super().__init__(measurement_condition={'temperature':temperature,
+                                                    **measurement_cond_kwargs},
+                            measurement_data=Suns_Isc_Voc_curve,**kwargs)
+        self.data_rows = ["Voc(V)"]
+        num_row = self.measurement_data.shape[0]
+        num_subcells = int((num_row-1)/2)
+        for i in range(num_subcells):
+            self.data_rows.append(f"subcell {i} Suns")
+        for i in range(num_subcells):
+            self.data_rows.append(f"subcell {i} IL(A)")
     @staticmethod
     def derive_key_parameters(data,key_parameters,conditions):
         key_parameters["Voc"] = data[0,:]

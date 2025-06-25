@@ -145,3 +145,13 @@ class CappedAbsGaussian(RandomNumberGenerator):
         if self.cap is not None:
             x = np.minimum(x,self.cap)
         return x
+
+def convert_ndarrays_to_lists(obj):
+    if isinstance(obj, dict):
+        return {k: convert_ndarrays_to_lists(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_ndarrays_to_lists(elem) for elem in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
