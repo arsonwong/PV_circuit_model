@@ -195,3 +195,4 @@ CircuitElement.plot = plot
 def show(self):
     plt.show()
 CircuitGroup.show = show
+CircuitElement.show = show

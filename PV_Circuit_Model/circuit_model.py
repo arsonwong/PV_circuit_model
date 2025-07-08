@@ -24,9 +24,9 @@ class CircuitElement:
         self.aux = {}
     def set_operating_point(self,V=None,I=None,dark_IV=None):
         if V is not None:
-            I = np.interp(V,self.IV_table[0,:],self.IV_table[1,:])
+            I = interp_(V,self.IV_table[0,:],self.IV_table[1,:])
         elif I is not None:
-            V = np.interp(I,self.IV_table[1,:],self.IV_table[0,:])
+            V = interp_(I,self.IV_table[1,:],self.IV_table[0,:])
         self.operating_point = [V,I]
     def get_value_text(self):
         pass
@@ -37,6 +37,9 @@ class CircuitElement:
         if display_value:
             text = self.get_value_text()
         draw_symbol(self.get_draw_func(),ax=ax,x=x,y=y,color=color,text=text)
+        if hasattr(self,"pos_node"):
+            ax.text(x,y-0.5,str(self.neg_node), va='center', fontsize=6)
+            ax.text(x,y+0.5,str(self.pos_node), va='center', fontsize=6)
     def null_IV(self, keep_dark=False):
         self.IV_table = None
         if self.parent is not None:
@@ -264,10 +267,12 @@ class CircuitGroup():
                 element.reassign_parents()
 
     def set_operating_point(self,V=None,I=None):
+        if self.IV_table is None:
+            self.build_IV()
         if V is not None:
-            I = np.interp(V,self.IV_table[0,:],self.IV_table[1,:])
+            I = interp_(V,self.IV_table[0,:],self.IV_table[1,:])
         elif I is not None:
-            V = np.interp(I,self.IV_table[1,:],self.IV_table[0,:])
+            V = interp_(I,self.IV_table[1,:],self.IV_table[0,:])
         for element in self.subgroups:
             if self.connection == "series": # then all elements have same current
                 target_I = I
