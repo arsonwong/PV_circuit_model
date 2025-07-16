@@ -241,6 +241,10 @@ class CircuitGroup():
         self.circuit_diagram_extent = get_circuit_diagram_extent(subgroups,connection)
         self.operating_point = None #V,I
         self.aux = {}
+
+    def add_element(self,element):
+        self.subgroups.append(element)
+        element.parent = self
     
     def null_IV(self, keep_dark=False):
         if self.IV_table is not None or self.dark_IV_table is not None:
