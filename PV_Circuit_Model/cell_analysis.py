@@ -21,6 +21,13 @@ def get_Isc(argument):
     return -interp_(0,IV_curve[0,:],IV_curve[1,:])
 CircuitGroup.get_Isc = get_Isc
 
+def get_Jsc(argument):
+    Jsc = argument.get_Isc()
+    if hasattr(argument,"area"):
+        Jsc /= argument.area
+    return Jsc
+CircuitGroup.get_Jsc = get_Jsc
+
 def get_Pmax(argument, return_op_point=False):
     if isinstance(argument,CircuitGroup):
         IV_curve = argument.IV_table
@@ -39,6 +46,13 @@ def get_Pmax(argument, return_op_point=False):
         return max_power, Vmp, Imp
     return max_power
 CircuitGroup.get_Pmax = get_Pmax
+
+def get_Eff(argument):
+    Eff = argument.get_Pmax()
+    if hasattr(argument,"area"):
+        Eff *= 10.0/argument.area
+    return Eff
+CircuitGroup.get_Eff = get_Eff
 
 def get_FF(argument):
     if isinstance(argument,CircuitGroup):
