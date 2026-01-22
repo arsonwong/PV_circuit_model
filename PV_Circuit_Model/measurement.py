@@ -1,7 +1,7 @@
 import numpy as np
 try:
     from matplotlib import pyplot as plt
-except Exception as e:
+except Exception:
     pass
 import PV_Circuit_Model.device as device_module
 import PV_Circuit_Model.utilities as utilities

@@ -12,13 +12,12 @@ try:
     from shapely.geometry import Polygon, Point
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
     from matplotlib.ticker import ScalarFormatter
-except Exception as e:
+except Exception:
     pass
-
-import numbers
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+import numbers # noqa: E402 
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union # noqa: E402 
 # Backward-compat for old pickles that expect Intrinsic_Si_diode here
-from PV_Circuit_Model.circuit_model import Intrinsic_Si_diode  # noqa: F401
+from PV_Circuit_Model.circuit_model import Intrinsic_Si_diode  # noqa: F401, E402 
 
 class Device(circuit.CircuitGroup):
     """Wrapper class for CircuitGroup

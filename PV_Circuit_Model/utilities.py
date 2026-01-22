@@ -3,7 +3,7 @@ import numbers
 try:
     from matplotlib import pyplot as plt
     import matplotlib.patches as patches
-except Exception as e:
+except Exception:
     pass
 from numbers import Number
 from dataclasses import dataclass, field

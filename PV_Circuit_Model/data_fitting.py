@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 try:
     from matplotlib import pyplot as plt
-except Exception as e:
+except Exception:
     pass
 import PV_Circuit_Model.utilities as utilities
 import PV_Circuit_Model.measurement as measurement_module

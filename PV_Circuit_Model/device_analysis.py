@@ -6,7 +6,7 @@ try:
     import matplotlib
     from matplotlib import pyplot as plt
     import matplotlib.ticker as mticker
-except Exception as e:
+except Exception:
     pass
 from contextlib import nullcontext
 import os
