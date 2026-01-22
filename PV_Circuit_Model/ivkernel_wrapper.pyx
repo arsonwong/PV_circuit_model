@@ -12,9 +12,10 @@ from PV_Circuit_Model.utilities_silicon import bandgap_narrowing_RT
 from pathlib import Path
 from libcpp cimport bool as cbool
 from libc.math cimport isfinite  # C-level, fast
+import sys
 import os
 
-PACKAGE_ROOT = Path(__file__).resolve().parent
+PACKAGE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 PARAM_DIR = PACKAGE_ROOT / "parameters"
 
 REFINE_V_HALF_WIDTH = 0.005

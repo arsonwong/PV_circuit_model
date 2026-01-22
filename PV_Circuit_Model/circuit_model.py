@@ -1,7 +1,10 @@
 import numpy as np
-from matplotlib import pyplot as plt
-import matplotlib.animation as animation
-from matplotlib.patches import Circle
+try:
+    from matplotlib import pyplot as plt
+    import matplotlib.animation as animation
+    from matplotlib.patches import Circle
+except Exception as e:
+    pass
 import PV_Circuit_Model.utilities as utilities
 import PV_Circuit_Model.utilities_silicon as silicon
 from tqdm import tqdm

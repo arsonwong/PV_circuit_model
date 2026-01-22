@@ -2,10 +2,13 @@ import numpy as np
 import PV_Circuit_Model.circuit_model as circuit
 import PV_Circuit_Model.device as device_module
 import PV_Circuit_Model.utilities as utilities
-import matplotlib
-from matplotlib import pyplot as plt
+try:
+    import matplotlib
+    from matplotlib import pyplot as plt
+    import matplotlib.ticker as mticker
+except Exception as e:
+    pass
 from contextlib import nullcontext
-import matplotlib.ticker as mticker
 import os
 from tqdm import tqdm
 from typing import Any, Dict, Optional, Sequence, Tuple, Union

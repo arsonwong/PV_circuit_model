@@ -1,5 +1,8 @@
 import numpy as np
-from matplotlib import pyplot as plt
+try:
+    from matplotlib import pyplot as plt
+except Exception as e:
+    pass
 import PV_Circuit_Model.device as device_module
 import PV_Circuit_Model.utilities as utilities
 import PV_Circuit_Model.device_analysis as analysis

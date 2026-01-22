@@ -1,13 +1,20 @@
 import numpy as np
 import PV_Circuit_Model.utilities_silicon as silicon
 import PV_Circuit_Model.circuit_model as circuit
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import matplotlib.cm as cm
-import matplotlib.colors as mcolors
-from shapely.geometry import Polygon, Point
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from matplotlib.ticker import ScalarFormatter
+from types import SimpleNamespace
+cm = SimpleNamespace()
+cm.plasma = None
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    from shapely.geometry import Polygon, Point
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    from matplotlib.ticker import ScalarFormatter
+except Exception as e:
+    pass
+
 import numbers
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 # Backward-compat for old pickles that expect Intrinsic_Si_diode here

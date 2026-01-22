@@ -1,10 +1,14 @@
 import numpy as np
 import numbers
-from matplotlib import pyplot as plt
-import matplotlib.patches as patches
+try:
+    from matplotlib import pyplot as plt
+    import matplotlib.patches as patches
+except Exception as e:
+    pass
 from numbers import Number
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, Callable, Union, Literal
+import sys
 import json
 import importlib
 import math
@@ -69,7 +73,7 @@ class ParameterSet:
             return dict_[name]
         return None
 
-PACKAGE_ROOT = Path(__file__).resolve().parent
+PACKAGE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 PARAM_DIR = PACKAGE_ROOT / "parameters"
 
 ParameterSet(name="constants",filename=PARAM_DIR / "constants.json")
