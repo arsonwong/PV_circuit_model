@@ -319,7 +319,7 @@ class Cell(Device,_type_number=6):
         for currentSource in currentSources:
             if currentSource.tag != "defect":
                 currentSource.refSuns = Suns
-                currentSource.refIL = JL
+                currentSource.refIL = max(0,JL)
                 currentSource.refT = temperature
                 currentSource.changeTemperatureAndSuns(
                     temperature=self.temperature,Suns=self.Suns)
