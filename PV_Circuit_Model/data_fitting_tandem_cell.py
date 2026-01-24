@@ -178,7 +178,7 @@ class Tandem_Cell_Fit_Parameters(fitting.Fit_Parameters):
 def analyze_solar_cell_measurements(
     measurements: Sequence[Any],
     num_of_rounds: int = 20,
-    regularization_method: int = 0,
+    regularization_method: int = 1,
     prefix: Optional[str] = None,
     sample_info: Optional[Dict[str, Any]] = None,
     starting_guess: Optional[Any] = None,

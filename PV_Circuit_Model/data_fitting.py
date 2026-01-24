@@ -993,6 +993,7 @@ def linear_regression(
     if aux is None:
         aux = {}
     alpha = 1e-5 
+    # regularization_method - 0: soft bounds; 1: hard bounds
     regularization_method=0 
     if "alpha" in aux:
         alpha = aux["alpha"]
