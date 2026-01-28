@@ -49,11 +49,11 @@ The library also supports optional uncertainty propagation by tracking upper and
 
 ## PV-specific extensions
 
-PV-Circuit-Model includes domain-specific circuit elements such as intrinsic silicon recombination diodes and photon-coupling diodes for modeling luminescence coupling in series-connected cells. Measurement and data-fitting utilities are provided to support rapid development of maximum a posteriori (MAP) fitting workflows.
+PV-Circuit-Model includes domain-specific circuit elements such as intrinsic silicon recombination diodes [@richter2012auger] and photon-coupling diodes for modeling luminescence coupling in series-connected cells. Measurement and data-fitting utilities are provided to support rapid development of maximum a posteriori (MAP) fitting workflows.
 
 # Performance and Benchmarking
 
-Benchmarking was performed against LTspice (x64, version 24.0.12) using circuits composed of current sources, diodes (n = 1 and n = 2), and resistors. Across all tested cases, I–V curves agree to within 0.01% and maximum power values to within 0.001%.
+Benchmarking was performed against LTspice (x64, version 24.0.12) [@ltspice] using circuits composed of current sources, diodes (n = 1 and n = 2), and resistors. Across all tested cases, I–V curves agree to within 0.01% and maximum power values to within 0.001%.
 
 ![Comparison of I–V curves simulated using PV-Circuit-Model and LTspice for representative test circuits, demonstrating excellent numerical agreement.](paper/figures/iv_comparison.png)
 
@@ -81,6 +81,6 @@ These examples illustrate the suitability of PV-Circuit-Model for both detailed 
 
 # Related Work
 
-Equivalent-circuit modeling complements spatially resolved finite-difference and finite-element tools used to extract effective device parameters. SPICE-based solvers remain a standard approach for circuit simulation but are not optimized for the hierarchical structure typical of PV systems. PV-Circuit-Model provides a specialized alternative that bridges detailed device modeling and large-scale system simulation.
+Equivalent-circuit modeling complements spatially resolved finite-difference and finite-element tools used to extract effective device parameters [@fell2018quokka; @clugston1997pc1d; @wu2017sentaurus; @wong2013griddler]. SPICE-based solvers remain a standard approach for circuit simulation but are not optimized for the hierarchical structure typical of PV systems [@ltspice; @hspice]. PV-Circuit-Model provides a specialized alternative that bridges detailed device modeling and large-scale system simulation.
 
 # References
