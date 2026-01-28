@@ -1,16 +1,17 @@
 import os
 import numpy as np
 from tqdm import tqdm
+plt = None
 try:
     from matplotlib import pyplot as plt
 except Exception:
     pass
-import PV_Circuit_Model.utilities as utilities
-import PV_Circuit_Model.measurement as measurement_module
-import PV_Circuit_Model.device as device_module
-import inspect
-import numbers
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+import PV_Circuit_Model.utilities as utilities # noqa: E402 
+import PV_Circuit_Model.measurement as measurement_module # noqa: E402 
+import PV_Circuit_Model.device as device_module # noqa: E402 
+import inspect # noqa: E402 
+import numbers # noqa: E402 
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union # noqa: E402 
 
 try:
     import tkinter as tk
@@ -21,9 +22,13 @@ except Exception:
     ttk = None
     FigureCanvasTkAgg = None
 
-from types import SimpleNamespace
-from joblib import Parallel, delayed
-from pathlib import Path
+from types import SimpleNamespace # noqa: E402 
+Parallel, delayed = None, None
+try:
+    from joblib import Parallel, delayed
+except Exception:
+    pass
+from pathlib import Path # noqa: E402 
 try:
     from PV_Circuit_Model.ivkernel import set_parallel_mode, get_parallel_mode
 except Exception as e:
@@ -645,24 +650,26 @@ class Fit_Dashboard():
         measurements: Optional[List[Any]] = None,
         RMS_errors: Optional[List[float]] = None,
     ) -> None:
-        self.fig, self.axs = plt.subplots(nrows, ncols, figsize=(6, 5), constrained_layout=True)
-        self._display_handle = None   # for notebook live-updates
-        self._shown = False           # for desktop GUI
-        self._in_nb = _in_notebook()
-        if self._in_nb:
-            # prevent Jupyter from auto-rendering a static copy the moment it's created
-            plt.close(self.fig)
-        else:
-            # for scripts/desktop: enable interactive redraws
-            plt.ion()
-
-        self.fig.canvas.manager.set_window_title("Fit Dashboard")
         self.nrows = nrows
         self.ncols = ncols
-        for ax in self.axs.flatten():
-            ax.set_visible(False)
-        self.plot_what = []
-        self.define_plot_what(which_axs=0,plot_type="error")
+        if plt:
+            self.fig, self.axs = plt.subplots(nrows, ncols, figsize=(6, 5), constrained_layout=True)
+            self._display_handle = None   # for notebook live-updates
+            self._shown = False           # for desktop GUI
+            self._in_nb = _in_notebook()
+            if self._in_nb:
+                # prevent Jupyter from auto-rendering a static copy the moment it's created
+                plt.close(self.fig)
+            else:
+                # for scripts/desktop: enable interactive redraws
+                plt.ion()
+
+            self.fig.canvas.manager.set_window_title("Fit Dashboard")
+            
+            for ax in self.axs.flatten():
+                ax.set_visible(False)
+            self.plot_what = []
+            self.define_plot_what(which_axs=0,plot_type="error")
         self.measurements = measurements # pointer
         self.RMS_errors = RMS_errors # pointer
         self.save_file_name = save_file_name
@@ -677,6 +684,8 @@ class Fit_Dashboard():
         title: Optional[str] = None,
         plot_style_parameters: Optional[Dict[str, Any]] = None,
     ) -> None:
+        if plt is None:
+            return
         if measurement_condition is None:
             measurement_condition = {}
         if plot_style_parameters is None:
@@ -883,7 +892,7 @@ class Interactive_Fit_Dashboard(Fit_Dashboard):
         self.nrows = nrows
         self.ncols = ncols
         self.RMS_errors = None
-        if ref_fit_dashboard is not None:
+        if ref_fit_dashboard is not None and plt is not None:
             self.plot_what = ref_fit_dashboard.plot_what
         self.measurements = measurement_module.collate_device_measurements(measurement_samples)
         self.parameter_names = fit_parameters.get("name",enabled_only=False)
@@ -1201,6 +1210,8 @@ def fit_routine(
         fit_routine([], params, routine_functions, num_of_epochs=1)
         ```
     """
+    if Parallel is None:
+        parallel = False
     if aux is None:
         aux = {}
     if parallel:
