@@ -930,6 +930,7 @@ def quick_module(
                 try_FF = np.interp(target_Pmax, record_[:,1], record_[:,0])
             else:
                 try_FF += 2*(target_Pmax - Pmax)/cell_Voc/Isc
+    module.aux["layout"] = {"num_strings": num_strings, "num_cells_per_halfstring": num_cells_per_halfstring, "butterfly": butterfly}
     return module
 
 def Module_(*args, **kwargs):
