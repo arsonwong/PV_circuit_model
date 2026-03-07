@@ -15,7 +15,7 @@ try:
 except Exception:
     pass
 import numbers # noqa: E402 
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union # noqa: E402 
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union, overload # noqa: E402 
 # Backward-compat for old pickles that expect Intrinsic_Si_diode here
 from PV_Circuit_Model.circuit_model import Intrinsic_Si_diode  # noqa: F401, E402 
 
@@ -1724,6 +1724,7 @@ class MultiJunctionCell(Device):
         return cls(subcells=subcells,**kwargs)
 
 # colormap: choose between cm.magma, inferno, plasma, cividis, viridis, turbo, gray
+@overload
 def draw_cells(
     self: Union[circuit.CircuitGroup, "Cell", List[Any]],
     display: bool = True,
@@ -1736,7 +1737,42 @@ def draw_cells(
     max_value: Optional[float] = None,
     title: str = "Cells Layout",
     colormap: Any = cm.plasma,
-) -> Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float]]:
+    return_cells: Literal[False] = False,
+) -> Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float]]: ...
+
+@overload
+def draw_cells(
+    self: Union[circuit.CircuitGroup, "Cell", List[Any]],
+    display: bool = True,
+    show_names: bool = False,
+    colour_bar: bool = False,
+    colour_what: Optional[str] = "Vint",
+    show_module_names: bool = False,
+    fontsize: int = 9,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    title: str = "Cells Layout",
+    colormap: Any = cm.plasma,
+    return_cells: Literal[True] = True,
+) -> Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float], List[Any]]: ...
+
+def draw_cells(
+    self: Union[circuit.CircuitGroup, "Cell", List[Any]],
+    display: bool = True,
+    show_names: bool = False,
+    colour_bar: bool = False,
+    colour_what: Optional[str] = "Vint",
+    show_module_names: bool = False,
+    fontsize: int = 9,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    title: str = "Cells Layout",
+    colormap: Any = cm.plasma,
+    return_cells: bool = False,
+) -> Union[
+    Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float]],
+    Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float], List[Any]],
+]:
     """Draw cell polygons with optional color mapping.
 
     Supports individual cells, circuit groups, or lists of devices. When
@@ -1759,8 +1795,9 @@ def draw_cells(
         colormap (Any): Matplotlib colormap.
 
     Returns:
-        Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float]]:
-            shapes, names, Vints, EL_Vints, Is.
+        Either `Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float]]`
+        or `Tuple[List[np.ndarray], List[Any], List[float], List[float], List[float], List[Any]]`:
+        `shapes, names, Vints, EL_Vints, Is[, cells]`.
 
     Example:
         ```python
@@ -1772,6 +1809,7 @@ def draw_cells(
     if display:
         fig, ax = plt.subplots()
     shapes = []
+    cells = []
     names = []
     Vints = []
     EL_Vints = []
@@ -1779,17 +1817,19 @@ def draw_cells(
     if isinstance(self,list):
         for element in self:
             if hasattr(element,"extent") and element.extent is not None:
-                shapes_, names_, Vints_, EL_Vints_, Is_ = element.draw_cells(display=False, colour_what=colour_what)
+                shapes_, names_, Vints_, EL_Vints_, Is_, cells_ = element.draw_cells(display=False, colour_what=colour_what, return_cells=True)
                 shapes.extend(shapes_)
                 names.extend(names_)
                 Vints.extend(Vints_)
                 EL_Vints.extend(EL_Vints_)
                 Is.extend(Is_)
+                cells.extend(cells_)
                 if show_module_names and element.name is not None and display:
                     ax.text(element.location[0], element.location[1]+element.extent[1]/2*1.05, element.name, fontsize=fontsize, color='black', ha="center", va="center")
     elif hasattr(self,"shape"): # a solar cell
         shapes.append(self.shape.copy())
         names.append(self.name)
+        cells.append(self)
         if self.diode_branch.operating_point is not None:
             Vints.append(self.diode_branch.operating_point[0])
             Is.append(self.operating_point[1])
@@ -1798,12 +1838,13 @@ def draw_cells(
     else:
         for element in self.subgroups:
             if hasattr(element,"extent") and element.extent is not None:
-                shapes_, names_, Vints_, EL_Vints_, Is_ = element.draw_cells(display=False, colour_what=colour_what)
+                shapes_, names_, Vints_, EL_Vints_, Is_, cells_ = element.draw_cells(display=False, colour_what=colour_what, return_cells=True)
                 shapes.extend(shapes_)
                 names.extend(names_)
                 Vints.extend(Vints_)
                 EL_Vints.extend(EL_Vints_)
                 Is.extend(Is_)
+                cells.extend(cells_)
     has_Vint = False
     has_EL_Vint = False
     has_power = False
@@ -1922,7 +1963,11 @@ def draw_cells(
             fig.tight_layout()
 
         plt.show()
-    return shapes, names, Vints, EL_Vints, Is
+
+    if return_cells:
+        return shapes, names, Vints, EL_Vints, Is, cells
+    else:
+        return shapes, names, Vints, EL_Vints, Is
 circuit.CircuitGroup.draw_cells = draw_cells
 
 draw_modules = draw_cells
