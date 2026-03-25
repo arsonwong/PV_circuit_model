@@ -29,7 +29,7 @@ Photovoltaic devices and systems are naturally represented as hierarchical netwo
 
 PV-Circuit-Model addresses this gap by providing a specialized solver that explicitly leverages the hierarchical structure of PV circuits. It enables fast and scalable DC simulation while maintaining accuracy comparable to SPICE solvers. The software is intended for researchers and engineers working on solar cell modeling, module and array simulation, and data-driven analysis workflows where throughput and scalability are critical.
 
-# Software Description
+# Software Design
 
 PV-Circuit-Model represents circuits as trees of series and parallel connections composed of lumped elements such as current sources, diodes, and resistors. Circuit definitions are expressed concisely in Python, while numerical curve stacking is implemented in C++ for performance.
 
@@ -79,8 +79,16 @@ Cell-level voltage distributions are simulated for large PV array blocks compris
 
 These examples illustrate the suitability of PV-Circuit-Model for both detailed device analysis and large-scale system studies.
 
-# Related Work
+# State of the Field
 
 Equivalent-circuit modeling complements spatially resolved finite-difference and finite-element tools used to extract effective device parameters [@fell2018quokka; @clugston1997pc1d; @wu2017sentaurus; @wong2013griddler]. SPICE-based solvers remain a standard approach for circuit simulation but are not optimized for the hierarchical structure typical of PV systems [@ltspice; @hspice]. PV-Circuit-Model provides a specialized alternative that bridges detailed device modeling and large-scale system simulation.
+
+# Research Impact Statement
+
+PV-Circuit-Model enables simulation workflows that were previously impractical due to the computational cost of conventional SPICE-based solvers. By reducing simulation time by orders of magnitude for large PV circuits, the software supports rapid design iteration for advanced solar cell architectures, cell-level analysis of fielded PV systems, and data-driven parameter extraction at scale. These capabilities are relevant to ongoing research in tandem solar cells, module reliability, and large-scale PV system optimization.
+
+# AI Usage Disclosure
+
+No AI-assisted tools were used in the development of the software or the writing of this paper.
 
 # References
