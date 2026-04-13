@@ -527,27 +527,31 @@ def estimate_cell_J01_J02(
         ```
     """
     if Pmax is None:
-        Pmax = Jsc*Voc*FF          
+        Pmax = Jsc*Voc*FF
     VT = utilities.get_VT(temperature)
+    # Floor for diode saturation currents: I0=0.0 exactly crashes the IV
+    # solver (zero-current diode → degenerate circuit). 1e-30 is small
+    # enough to have no physical effect but keeps the solver stable.
+    _J0_FLOOR = 1e-30
     max_J01 = Jsc/np.exp(Voc/VT)
     for inner_k in range(100):
-        trial_cell = device_module.make_solar_cell(Jsc, max_J01, 0.0, Rshunt, 
+        trial_cell = device_module.make_solar_cell(Jsc, max_J01, 0.0, Rshunt,
                                      Rs, Si_intrinsic_limit=Si_intrinsic_limit, **kwargs)
         trial_cell.set_temperature(temperature)
         trial_cell.set_Suns(Sun)
         Voc_ = trial_cell.get_Voc()
         if abs(Voc_-Voc) < 1e-10:
-            break 
+            break
         max_J01 *= np.exp((Voc_-Voc)/VT)
     max_J02 = Jsc/np.exp(Voc/(2*VT))
     for inner_k in range(100):
-        trial_cell = device_module.make_solar_cell(Jsc, 0.0, max_J02, Rshunt, Rs, 
+        trial_cell = device_module.make_solar_cell(Jsc, 0.0, max_J02, Rshunt, Rs,
                                      Si_intrinsic_limit=Si_intrinsic_limit,**kwargs)
         trial_cell.set_temperature(temperature)
         trial_cell.set_Suns(Sun)
         Voc_ = trial_cell.get_Voc()
         if abs(Voc_-Voc) < 1e-10:
-            break 
+            break
         max_J02 *= np.exp((Voc_-Voc)/(2*VT))
     outer_record = []
     for outer_k in range(100):
@@ -577,13 +581,20 @@ def estimate_cell_J01_J02(
                 trial_J02 = utilities.interp_(Voc, inner_record_[:,1], inner_record_[:,0])
                 trial_J02 = max(trial_J02, 0.0)
                 trial_J02 = min(trial_J02, max_J02)
-            trial_cell = device_module.make_solar_cell(Jsc, trial_J01, trial_J02, Rshunt, Rs,
+            # Clamp: the IV solver crashes if both J01 and J02 are exactly 0
+            # (no forward diode current at any voltage → degenerate circuit).
+            # Only apply floor when both are zero and there's no intrinsic Si diode.
+            safe_J01 = trial_J01
+            safe_J02 = trial_J02
+            if not Si_intrinsic_limit and trial_J01 == 0.0 and trial_J02 == 0.0:
+                safe_J02 = _J0_FLOOR
+            trial_cell = device_module.make_solar_cell(Jsc, safe_J01, safe_J02, Rshunt, Rs,
                                          Si_intrinsic_limit=Si_intrinsic_limit,**kwargs)
             trial_cell.set_temperature(temperature)
             trial_cell.set_Suns(Sun)
             Voc_ = trial_cell.get_Voc()
             if abs(Voc_-Voc) < 1e-10 or (trial_J02==0 and Voc_<Voc) or (trial_J02==max_J02 and Voc_>Voc):
-                break 
+                break
             inner_record.append([trial_J02,Voc_])
         Pmax_ = trial_cell.get_Pmax()
         outer_record.append([trial_J01,Pmax_])
@@ -930,7 +941,7 @@ def quick_module(
                 try_FF = np.interp(target_Pmax, record_[:,1], record_[:,0])
             else:
                 try_FF += 2*(target_Pmax - Pmax)/cell_Voc/Isc
-    module.aux["layout"] = {"num_strings": num_strings, "num_cells_per_halfstring": num_cells_per_halfstring, "butterfly": butterfly}
+    module.aux["layout"] = {"num_strings": num_strings, "num_cells_per_halfstring": num_cells_per_halfstring, "butterfly": butterfly, "half_cut": half_cut}
     return module
 
 def Module_(*args, **kwargs):
@@ -1018,7 +1029,7 @@ def quick_tandem_cell(
         if i > 0:
             Si_intrinsic_limit = False
         J01, J02 = estimate_cell_J01_J02(Jscs[i],Vocs[i],FF=FFs[i],Rs=Rss[i],Rshunt=Rshunts[i],Si_intrinsic_limit=Si_intrinsic_limit,thickness=thicknesses[i])
-        cells.append(device_module.make_solar_cell(Jscs[i], J01, J02, Rshunts[i], Rss[i], **device_module.wafer_shape(format=wafer_format, half_cut=half_cut), thickness=thicknesses[i]))
+        cells.append(device_module.make_solar_cell(Jscs[i], J01, J02, Rshunts[i], Rss[i], Si_intrinsic_limit=Si_intrinsic_limit, **device_module.wafer_shape(format=wafer_format, half_cut=half_cut), thickness=thicknesses[i]))
     return device_module.MultiJunctionCell(cells)
 
 def solver_summary_heap(job_heap: Any, display_or_latex: int = 0) -> str:
