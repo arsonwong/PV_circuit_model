@@ -4,6 +4,21 @@ import sys
 import types
 import importlib
 
+# matplotlib's TkAgg manager defers its actual window.destroy() via an
+# after_idle callback, so Tk Image/Variable objects keep lingering after
+# plt.close(fig). When Python GCs them — both mid-run between Fit_Dashboard
+# stages and at interpreter shutdown — the Tcl interpreter's thread-id
+# check can fire "main thread is not in main loop". It's harmless; swallow
+# just that one message and let everything else through.
+_prev_unraisable_hook = sys.unraisablehook
+def _suppress_tk_shutdown_noise(unraisable, _prev=_prev_unraisable_hook):
+    exc = unraisable.exc_value
+    if (isinstance(exc, RuntimeError)
+            and "main thread is not in main loop" in str(exc)):
+        return
+    _prev(unraisable)
+sys.unraisablehook = _suppress_tk_shutdown_noise
+
 __version__ = "0.6.0"
 
 def _get_git_info():
